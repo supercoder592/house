@@ -1,0 +1,479 @@
+<title>金邸計畫</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;900&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>
+  :root{
+    --ink:#111318;
+    --panel:#1a1d25;
+    --panel-2:#20242e;
+    --line:#32363f;
+    --gold:#c9a35c;
+    --gold-soft:#8a7347;
+    --ivory:#efe9dc;
+    --muted:#9a9689;
+    --good:#7fb98a;
+    --bad:#d97b6c;
+    --radius:10px;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    background:var(--ink);
+    color:var(--ivory);
+    font-family:"Noto Sans TC",-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif;
+    font-size:15px;
+    line-height:1.6;
+    padding-block:0 48px;
+    padding-inline:20px;
+  }
+  header.masthead{
+    max-width:1180px;margin:0 auto;
+    padding-block:28px 20px;
+    display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;
+    border-bottom:1px solid var(--line);
+  }
+  .masthead h1{
+    font-family:"Noto Serif TC","Noto Sans TC",serif;
+    font-weight:900;font-size:clamp(26px,4vw,38px);
+    margin:0;letter-spacing:.06em;color:var(--gold);
+    text-wrap:balance;
+  }
+  .masthead .tagline{color:#9a9689;font-size:13px;letter-spacing:.12em}
+  .board{
+    max-width:1180px;margin:20px auto 0;
+    display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:20px;
+  }
+  @media (max-width:860px){.board{grid-template-columns:minmax(0,1fr)}}
+
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
+  .panel h2{
+    font-family:"Noto Serif TC",serif;font-weight:600;font-size:16px;
+    margin:0 0 12px;color:var(--gold);letter-spacing:.14em;
+  }
+
+  /* ── 狀態列 ── */
+  .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:20px}
+  @media (max-width:520px){.stats{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px}
+  .stat .label{font-size:11px;letter-spacing:.18em;color:#9a9689;text-transform:uppercase}
+  .stat .value{
+    font-family:"Noto Serif TC",serif;font-weight:900;font-size:clamp(18px,3vw,26px);
+    font-variant-numeric:tabular-nums;margin-top:2px;
+  }
+  .stat .value.debt{color:var(--bad)}
+  .stat .value.gold{color:var(--gold)}
+
+  /* ── 豪宅視圖 ── */
+  .estate{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+  @media (max-width:520px){.estate{grid-template-columns:repeat(3,minmax(0,1fr))}}
+  .lot{
+    aspect-ratio:1;border:1px dashed var(--line);border-radius:8px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+    background:var(--panel-2);padding:6px;text-align:center;min-width:0;
+  }
+  .lot.empty{opacity:.35;font-size:12px;color:#9a9689}
+  .lot.built{border:1px solid var(--gold-soft);background:#242018}
+  .lot.damaged{border:1px solid var(--bad);background:#2a1c1a}
+  .lot .icon{font-size:clamp(20px,4vw,28px);line-height:1}
+  .lot .name{font-size:11px;line-height:1.3;color:var(--ivory)}
+  .lot.damaged .name{color:var(--bad)}
+  .lot .tag{font-size:10px;color:#9a9689}
+
+  /* ── 商店 ── */
+  .shop{display:flex;flex-direction:column;gap:8px;max-height:430px;overflow-y:auto;padding-right:4px}
+  .item{
+    display:flex;align-items:center;gap:10px;
+    background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;
+  }
+  .item .icon{font-size:20px;flex:0 0 auto}
+  .item .info{flex:1;min-width:0}
+  .item .info .n{font-weight:700;font-size:14px}
+  .item .info .d{font-size:12px;color:#9a9689}
+  .item .price{font-variant-numeric:tabular-nums;font-size:13px;color:var(--gold);white-space:nowrap}
+  .item button{
+    flex:0 0 auto;border:1px solid var(--gold-soft);background:transparent;color:var(--gold);
+    border-radius:6px;padding:5px 14px;font-family:inherit;font-size:13px;cursor:pointer;
+  }
+  .item button:hover:not(:disabled){background:var(--gold);color:var(--ink)}
+  .item button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+  .item button:disabled{opacity:.35;cursor:not-allowed}
+  .item.owned{border-color:var(--gold-soft)}
+  .item.owned .price{color:var(--good)}
+
+  .cat-label{font-size:11px;letter-spacing:.2em;color:#9a9689;margin:10px 0 2px}
+  .cat-label:first-child{margin-top:0}
+
+  /* ── 行動列 ── */
+  .actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:16px}
+  .btn-next{
+    font-family:"Noto Serif TC",serif;font-weight:600;font-size:16px;letter-spacing:.14em;
+    background:var(--gold);color:var(--ink);border:none;border-radius:8px;
+    padding:12px 28px;cursor:pointer;
+  }
+  .btn-next:hover:not(:disabled){filter:brightness(1.1)}
+  .btn-next:focus-visible{outline:2px solid var(--ivory);outline-offset:2px}
+  .btn-next:disabled{opacity:.4;cursor:not-allowed}
+  .hint{font-size:12px;color:#9a9689}
+
+  /* ── 日誌 ── */
+  .log{display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto}
+  .entry{
+    border-left:3px solid var(--line);padding:6px 10px;font-size:13px;
+    background:var(--panel-2);border-radius:0 6px 6px 0;
+  }
+  .entry .m{font-size:11px;color:#9a9689;letter-spacing:.1em}
+  .entry.event{border-left-color:var(--gold)}
+  .entry.disaster{border-left-color:var(--bad)}
+  .entry.gain{border-left-color:var(--good)}
+
+  /* ── 事件卡 ── */
+  .overlay{
+    position:fixed;inset:0;background:rgba(8,9,12,.8);
+    display:flex;align-items:center;justify-content:center;padding:20px;z-index:10;
+  }
+  .card{
+    background:var(--panel);border:1px solid var(--gold-soft);border-radius:14px;
+    max-width:420px;width:100%;padding:28px;text-align:center;
+  }
+  .card.disaster{border-color:var(--bad)}
+  .card .big{font-size:52px;line-height:1;margin-bottom:12px}
+  .card h3{
+    font-family:"Noto Serif TC",serif;font-weight:900;font-size:24px;margin:0 0 10px;
+    color:var(--gold);letter-spacing:.1em;text-wrap:balance;
+  }
+  .card.disaster h3{color:var(--bad)}
+  .card p{margin:0 0 6px;color:var(--ivory)}
+  .card .effect{font-variant-numeric:tabular-nums;font-weight:700;margin-top:10px}
+  .card .effect.bad{color:var(--bad)}
+  .card .effect.good{color:var(--good)}
+  .card button{
+    margin-top:20px;background:var(--gold);color:var(--ink);border:none;border-radius:8px;
+    padding:10px 32px;font-family:"Noto Serif TC",serif;font-weight:600;font-size:15px;
+    letter-spacing:.14em;cursor:pointer;
+  }
+  .card.disaster button{background:var(--bad)}
+  .card button:focus-visible{outline:2px solid var(--ivory);outline-offset:2px}
+
+  /* ── 結局 ── */
+  .ending .rank{
+    font-family:"Noto Serif TC",serif;font-weight:900;font-size:34px;color:var(--gold);
+    margin:8px 0;letter-spacing:.08em;
+  }
+  .ending table{margin:14px auto 0;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  .ending td{padding:3px 12px;font-size:14px;text-align:left}
+  .ending td:last-child{text-align:right;color:var(--gold)}
+
+  @media (prefers-reduced-motion:no-preference){
+    .card{animation:pop .25s ease-out}
+    @keyframes pop{from{transform:scale(.92);opacity:0}to{transform:scale(1);opacity:1}}
+  }
+</style>
+
+<header class="masthead">
+  <h1>金邸計畫</h1>
+  <span class="tagline">十二個月・一億預算・打造傳世豪邸</span>
+</header>
+
+<div class="board" style="max-width:1180px;margin-inline:auto">
+  <div>
+    <div class="stats">
+      <div class="stat"><div class="label">預算</div><div class="value gold" id="stat-budget">10,000萬</div></div>
+      <div class="stat"><div class="label">豪華度</div><div class="value" id="stat-luxury">0</div></div>
+      <div class="stat"><div class="label">進度</div><div class="value" id="stat-month">第 1 月</div></div>
+    </div>
+
+    <div class="panel" style="margin-bottom:20px">
+      <h2>宅邸現況</h2>
+      <div class="estate" id="estate"></div>
+      <div class="actions">
+        <button class="btn-next" id="btn-next">進入下個月</button>
+        <span class="hint">每月可建造任意數量的設施；時間推進時可能發生事件或天災。</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>營造日誌</h2>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>營造型錄</h2>
+    <div class="shop" id="shop"></div>
+  </div>
+</div>
+
+<div id="modal-root"></div>
+
+<script>
+"use strict";
+const W = v => v.toLocaleString("zh-TW") + "萬";
+
+// ─── 型錄 ───────────────────────────────────────────
+// protect: 對應天災 key；outdoor/basement: 天災易損標記
+const CATALOG = [
+  {id:"seismic",  cat:"防災工程", icon:"🏗️", name:"制震結構",       cost:800,  lux:3,  protect:"quake",   desc:"大幅降低地震損失"},
+  {id:"storm",    cat:"防災工程", icon:"🪟", name:"防颱氣密窗",     cost:300,  lux:2,  protect:"typhoon", desc:"大幅降低颱風損失"},
+  {id:"sprinkler",cat:"防災工程", icon:"🧯", name:"消防灑水系統",   cost:250,  lux:1,  protect:"fire",    desc:"大幅降低火災損失"},
+  {id:"drainage", cat:"防災工程", icon:"🚧", name:"排水與擋水閘門", cost:350,  lux:1,  protect:"flood",   desc:"大幅降低洪水損失"},
+  {id:"hall",     cat:"主體空間", icon:"🏛️", name:"挑高迎賓大廳",   cost:1200, lux:18, desc:"氣派的兩層樓門面"},
+  {id:"master",   cat:"主體空間", icon:"🛏️", name:"主臥套房",       cost:900,  lux:14, desc:"更衣室與湯屋一應俱全"},
+  {id:"kitchen",  cat:"主體空間", icon:"🍳", name:"米其林級廚房",   cost:780,  lux:13, desc:"中島、雙烤箱、專業爐具"},
+  {id:"garage",   cat:"主體空間", icon:"🏎️", name:"跑車展示車庫",   cost:1100, lux:17, desc:"旋轉展示台與玻璃帷幕"},
+  {id:"pool",     cat:"休閒設施", icon:"🏊", name:"無邊際泳池",     cost:1500, lux:22, outdoor:true, basement:false, desc:"戶外設施，颱風與洪水易受損"},
+  {id:"cinema",   cat:"休閒設施", icon:"🎬", name:"家庭劇院",       cost:850,  lux:15, desc:"4K 雷射投影與環繞音響"},
+  {id:"cellar",   cat:"休閒設施", icon:"🍷", name:"私人酒窖",       cost:700,  lux:12, basement:true, desc:"地下空間，洪水易受損"},
+  {id:"gym",      cat:"休閒設施", icon:"🧖", name:"健身房與 SPA",   cost:650,  lux:11, desc:"私人教練級器材"},
+  {id:"library",  cat:"休閒設施", icon:"📚", name:"典藏圖書室",     cost:480,  lux:9,  desc:"胡桃木書牆與壁爐"},
+  {id:"garden",   cat:"景觀造園", icon:"🎋", name:"日式枯山水庭園", cost:550,  lux:10, outdoor:true, desc:"戶外設施，颱風易受損"},
+  {id:"skygarden",cat:"景觀造園", icon:"🌿", name:"空中花園",       cost:950,  lux:16, outdoor:true, desc:"戶外設施，颱風易受損"},
+  {id:"smart",    cat:"景觀造園", icon:"🤖", name:"智慧家居系統",   cost:400,  lux:8,  desc:"全屋自動化，可能獲政府補助"},
+];
+const BY_ID = Object.fromEntries(CATALOG.map(c=>[c.id,c]));
+const MONTHS = 12;
+
+// ─── 天災 ───────────────────────────────────────────
+const DISASTERS = [
+  {key:"quake",   icon:"🌋", name:"強烈地震", flavor:"芮氏規模 6.8 的地震襲來，整座宅邸劇烈搖晃。",
+   heavy:{cash:800, lux:15, note:"結構受損嚴重"}, light:{cash:50, note:"制震結構發揮作用，僅輕微裂縫"}},
+  {key:"typhoon", icon:"🌀", name:"超級颱風", flavor:"17 級陣風夾帶豪雨直撲而來。",
+   heavy:{cash:500, lux:10, hitTag:"outdoor", note:"戶外設施遭強風摧殘"}, light:{cash:30, note:"氣密窗擋下風雨，損失輕微"}},
+  {key:"fire",    icon:"🔥", name:"電線走火", flavor:"深夜配電箱竄出火苗，火勢一度蔓延。",
+   heavy:{cash:700, lux:12, note:"火勢波及多個房間"}, light:{cash:40, note:"灑水系統即時撲滅，虛驚一場"}},
+  {key:"flood",   icon:"🌊", name:"暴雨洪災", flavor:"時雨量破百毫米，街道成河，洪水湧向宅邸。",
+   heavy:{cash:600, lux:10, hitTag:"basement", note:"地下與低窪空間泡水"}, light:{cash:20, note:"擋水閘門守住了，僅需清理"}},
+];
+
+// ─── 突發事件 ───────────────────────────────────────
+const EVENTS = [
+  {icon:"📈", name:"建材大漲",   flavor:"國際原物料飆漲，營造行情跟著水漲船高。", cash:-250},
+  {icon:"👷", name:"工班罷工",   flavor:"工班集體停工爭取加薪，你付了補貼才復工。", cash:-150},
+  {icon:"💧", name:"水管爆裂",   flavor:"施工不慎打破主水管，地板重做。", cash:-120},
+  {icon:"📢", name:"鄰居抗議",   flavor:"施工噪音引來抗議，你送上禮盒與補償金。", cash:-180},
+  {icon:"💰", name:"繼承遺產",   flavor:"遠房親戚留給你一筆意外之財。", cash:500},
+  {icon:"📊", name:"股票大賺",   flavor:"你手上的持股漲停三天，果斷獲利了結。", cash:350},
+  {icon:"🏆", name:"名師操刀",   flavor:"國際建築大師路過驚豔，免費幫你微調設計。", lux:8},
+  {icon:"📰", name:"雜誌專訪",   flavor:"居家雜誌以你的宅邸做封面故事，名利雙收。", lux:5, cash:200},
+  {icon:"🌱", name:"綠建築補助", flavor:"政府審核通過智慧節能補助。", cash:300, need:"smart",
+   fallbackFlavor:"政府綠建築補助開放申請，可惜你沒有智慧家居系統，資格不符。"},
+];
+
+// ─── 遊戲狀態 ───────────────────────────────────────
+let S;
+function freshState(){
+  return {budget:10000, lux:0, month:1, built:[], damaged:[], log:[], over:false};
+}
+
+const $ = id => document.getElementById(id);
+const hasProtect = key => S.built.some(id => BY_ID[id].protect === key);
+
+function addLog(cls, text){
+  S.log.unshift({m:S.month, cls, text});
+}
+
+// ─── 畫面 ───────────────────────────────────────────
+function render(){
+  $("stat-budget").textContent = W(S.budget);
+  $("stat-budget").className = "value " + (S.budget < 0 ? "debt" : "gold");
+  $("stat-luxury").textContent = S.lux;
+  $("stat-month").textContent = S.over ? "完工" : `第 ${S.month} 月`;
+  $("btn-next").disabled = S.over;
+  $("btn-next").textContent = S.month >= MONTHS ? "驗收完工" : "進入下個月";
+
+  // 宅邸格
+  const estate = $("estate");
+  estate.innerHTML = "";
+  const slots = Math.max(8, Math.ceil(S.built.length/4)*4);
+  for(let i=0;i<slots;i++){
+    const div = document.createElement("div");
+    const id = S.built[i];
+    if(id){
+      const it = BY_ID[id];
+      const dmg = S.damaged.includes(id);
+      div.className = "lot built" + (dmg ? " damaged" : "");
+      div.innerHTML = `<span class="icon">${it.icon}</span><span class="name">${it.name}</span>` +
+        (dmg ? `<span class="tag">受損</span>` : it.protect ? `<span class="tag">防災</span>` : "");
+    }else{
+      div.className = "lot empty";
+      div.textContent = "空地";
+    }
+    estate.appendChild(div);
+  }
+
+  // 型錄
+  const shop = $("shop");
+  shop.innerHTML = "";
+  let lastCat = "";
+  for(const it of CATALOG){
+    if(it.cat !== lastCat){
+      lastCat = it.cat;
+      const lab = document.createElement("div");
+      lab.className = "cat-label";
+      lab.textContent = "── " + it.cat + " ──";
+      shop.appendChild(lab);
+    }
+    const owned = S.built.includes(it.id);
+    const row = document.createElement("div");
+    row.className = "item" + (owned ? " owned" : "");
+    row.innerHTML =
+      `<span class="icon">${it.icon}</span>` +
+      `<div class="info"><div class="n">${it.name}　<span class="price">${owned ? "已建造" : W(it.cost)}</span></div>` +
+      `<div class="d">豪華 +${it.lux}｜${it.desc}</div></div>`;
+    const btn = document.createElement("button");
+    btn.textContent = owned ? "✓" : "建造";
+    btn.disabled = owned || S.over || S.budget < it.cost;
+    btn.addEventListener("click", ()=>buy(it.id));
+    row.appendChild(btn);
+    shop.appendChild(row);
+  }
+
+  // 日誌
+  const log = $("log");
+  log.innerHTML = "";
+  if(!S.log.length){
+    log.innerHTML = `<div class="entry"><span class="m">開工</span>　歡迎！先建造幾項設施，別忘了防災工程──天有不測風雲。</div>`;
+  }
+  for(const e of S.log.slice(0,40)){
+    const div = document.createElement("div");
+    div.className = "entry " + e.cls;
+    div.innerHTML = `<span class="m">第${e.m}月</span>　${e.text}`;
+    log.appendChild(div);
+  }
+  save();
+}
+
+function buy(id){
+  const it = BY_ID[id];
+  if(S.built.includes(id) || S.budget < it.cost || S.over) return;
+  S.budget -= it.cost;
+  S.lux += it.lux;
+  S.built.push(id);
+  addLog("gain", `建造「${it.name}」，花費 ${W(it.cost)}，豪華 +${it.lux}。`);
+  render();
+}
+
+// ─── 事件卡 ─────────────────────────────────────────
+function showCard({disaster, icon, title, flavor, effects, onClose}){
+  const root = $("modal-root");
+  const fx = effects.map(e =>
+    `<div class="effect ${e.good ? "good" : "bad"}">${e.text}</div>`).join("");
+  root.innerHTML =
+    `<div class="overlay"><div class="card ${disaster ? "disaster" : ""}">` +
+    `<div class="big">${icon}</div><h3>${title}</h3><p>${flavor}</p>${fx}` +
+    `<button id="card-ok">${disaster ? "面對現實" : "知道了"}</button></div></div>`;
+  const ok = $("card-ok");
+  ok.focus();
+  ok.addEventListener("click", ()=>{ root.innerHTML=""; onClose && onClose(); });
+}
+
+// ─── 月份推進 ───────────────────────────────────────
+function nextMonth(){
+  if(S.over) return;
+  if(S.month >= MONTHS){ finish(); return; }
+  S.month++;
+
+  const roll = Math.random();
+  if(roll < 0.28) fireDisaster();
+  else if(roll < 0.62) fireEvent();
+  else{
+    addLog("", "本月風平浪靜，工程順利推進。");
+    render();
+  }
+}
+
+function fireDisaster(){
+  const d = DISASTERS[Math.floor(Math.random()*DISASTERS.length)];
+  const protectedNow = hasProtect(d.key);
+  const eff = protectedNow ? d.light : d.heavy;
+  const effects = [{text:`修繕費 −${W(eff.cash)}`, good:false}];
+  S.budget -= eff.cash;
+
+  if(!protectedNow){
+    if(eff.lux){
+      const loss = Math.min(eff.lux, S.lux);
+      S.lux -= loss;
+      if(loss) effects.push({text:`豪華度 −${loss}`, good:false});
+    }
+    // 易損設施受災
+    if(eff.hitTag){
+      const victims = S.built.filter(id => BY_ID[id][eff.hitTag] && !S.damaged.includes(id));
+      if(victims.length){
+        const v = victims[Math.floor(Math.random()*victims.length)];
+        S.damaged.push(v);
+        const extra = Math.floor(BY_ID[v].lux/2);
+        S.lux = Math.max(0, S.lux - extra);
+        effects.push({text:`「${BY_ID[v].name}」受損，豪華度再 −${extra}`, good:false});
+      }
+    }
+  }
+  effects.push({text:eff.note, good:protectedNow});
+  addLog("disaster", `${d.icon} ${d.name}！${eff.note}，損失 ${W(eff.cash)}。`);
+  render();
+  showCard({disaster:true, icon:d.icon, title:d.name, flavor:d.flavor, effects, onClose:checkBankrupt});
+}
+
+function fireEvent(){
+  let e = EVENTS[Math.floor(Math.random()*EVENTS.length)];
+  let flavor = e.flavor, cash = e.cash||0, lux = e.lux||0;
+  if(e.need && !S.built.includes(e.need)){ flavor = e.fallbackFlavor; cash = 0; lux = 0; }
+  S.budget += cash;
+  S.lux += lux;
+  const effects = [];
+  if(cash) effects.push({text:`${cash>0?"+":"−"}${W(Math.abs(cash))}`, good:cash>0});
+  if(lux)  effects.push({text:`豪華度 +${lux}`, good:true});
+  if(!effects.length) effects.push({text:"沒有實質影響", good:true});
+  addLog(cash>=0 && lux>=0 ? "gain" : "event", `${e.icon} ${e.name}：${flavor}`);
+  render();
+  showCard({disaster:false, icon:e.icon, title:e.name, flavor, effects, onClose:checkBankrupt});
+}
+
+function checkBankrupt(){
+  if(S.budget < -500 && !S.over){
+    S.over = true;
+    addLog("disaster", "資金缺口過大，銀行拒絕續貸，工程被迫中止……");
+    render();
+    showEnding("💸", "破產收場", "負債累累，豪宅夢碎。下次記得留點週轉金，並及早投資防災工程。");
+  }
+}
+
+// ─── 結局 ───────────────────────────────────────────
+function finish(){
+  S.over = true;
+  const score = S.lux + Math.max(0, Math.floor(S.budget/200));
+  let icon, rank, note;
+  if(S.lux <= 0){ icon="🏚️"; rank="一片空地"; note="十二個月過去，這裡還是雜草叢生。至少……錢還在？"; }
+  else if(score >= 120){ icon="👑"; rank="傳世豪邸"; note="建築雜誌爭相報導，這座宅邸將流傳百年。"; }
+  else if(score >= 85){ icon="🏰"; rank="頂級豪宅"; note="氣派非凡，賓客無不驚嘆。"; }
+  else if(score >= 50){ icon="🏡"; rank="精品美宅"; note="舒適有品味，是理想的家。"; }
+  else{ icon="🛖"; rank="樸實小屋"; note="雖然簡單，但遮風避雨綽綽有餘。"; }
+  addLog("gain", `工程驗收完成！評定為「${rank}」（總分 ${score}）。`);
+  render();
+  showEnding(icon, rank, note, score);
+}
+
+function showEnding(icon, rank, note, score){
+  const root = $("modal-root");
+  const rows =
+    `<tr><td>豪華度</td><td>${S.lux}</td></tr>` +
+    `<tr><td>剩餘預算</td><td>${W(S.budget)}</td></tr>` +
+    `<tr><td>建造設施</td><td>${S.built.length} 項</td></tr>` +
+    (score != null ? `<tr><td>總分</td><td>${score}</td></tr>` : "");
+  root.innerHTML =
+    `<div class="overlay"><div class="card ending"><div class="big">${icon}</div>` +
+    `<h3 style="font-size:15px;letter-spacing:.3em;font-weight:600">最終評定</h3>` +
+    `<div class="rank">${rank}</div><p>${note}</p><table>${rows}</table>` +
+    `<button id="card-restart">再蓋一棟</button></div></div>`;
+  const btn = $("card-restart");
+  btn.focus();
+  btn.addEventListener("click", ()=>{ root.innerHTML=""; S = freshState(); render(); });
+}
+
+// ─── 存檔（跨版本熱更新）────────────────────────────
+function save(){ try{ window.claude?.hot?.snapshot?.(S); }catch(e){} }
+function start(data){
+  S = (data && data.built) ? data : freshState();
+  $("btn-next").addEventListener("click", nextMonth);
+  render();
+}
+const boot = () => (window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? null));
+boot();
+</script>
