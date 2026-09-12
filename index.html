@@ -117,6 +117,7 @@
     #t-break{right:16px;bottom:134px;border-color:var(--bad)}
     #t-up{right:82px;bottom:190px}
     #t-down{right:82px;bottom:134px}
+    #t-rot{right:148px;bottom:190px}
   }
 
   /* ── 卡片與遮罩 ── */
@@ -224,6 +225,7 @@
   <button class="tbtn" id="t-break">拆除</button>
   <button class="tbtn" id="t-up">上升</button>
   <button class="tbtn" id="t-down">下降</button>
+  <button class="tbtn" id="t-rot">旋轉</button>
 </div>
 
 <div id="flash"></div>
@@ -236,17 +238,18 @@ const W = v => v.toLocaleString("zh-TW") + "萬";
 const $ = id => document.getElementById(id);
 const IS_TOUCH = matchMedia("(pointer:coarse)").matches;
 
-// ─── 方塊型錄（cost 單位：萬）────────────────────────
+// ─── 建築構件型錄（cost 單位：萬；尺寸單位：公尺）──────
 const TYPES = [
-  {id:"concrete", name:"混凝土", cost:5,  lux:1, color:0x8f959e},
-  {id:"marble",   name:"大理石", cost:20, lux:3, color:0xece5d6},
-  {id:"wood",     name:"原木",   cost:8,  lux:1, color:0x8a5a33, flammable:true},
-  {id:"brick",    name:"紅磚",   cost:6,  lux:1, color:0xb0493f},
-  {id:"glass",    name:"玻璃",   cost:15, lux:2, color:0x9fd8ef, transparent:true, fragile:true},
-  {id:"roof",     name:"黑瓦",   cost:10, lux:1, color:0x3a3f4a},
-  {id:"gold",     name:"金磚",   cost:80, lux:8, color:0xd4af37, metal:true},
-  {id:"water",    name:"池水",   cost:12, lux:2, color:0x3f8fd2, transparent:true, water:true},
-  {id:"light",    name:"燈飾",   cost:25, lux:3, color:0xffe9b0, emissive:true},
+  {id:"wallC", name:"混凝土牆", w:4, h:3,   d:.25, cost:40,  lux:2,  color:0x989da2, tex:"concrete",  rep:[2,1.5]},
+  {id:"wallM", name:"大理石牆", w:4, h:3,   d:.25, cost:120, lux:8,  color:0xece6da, tex:"marble",    rep:[2,1.5]},
+  {id:"wallW", name:"木質牆",   w:4, h:3,   d:.25, cost:60,  lux:3,  color:0x8a5a33, tex:"wood",      rep:[2,1.5], flammable:true},
+  {id:"glass", name:"玻璃帷幕", w:4, h:3,   d:.15, cost:90,  lux:6,  color:0x9fd8ef, tex:"glass",     rep:[2,1.5], transparent:true, fragile:true},
+  {id:"door",  name:"大門牆",   w:4, h:3,   d:.25, cost:80,  lux:4,  color:0xb08968, tex:"door",      rep:[1,1],   flammable:true},
+  {id:"slab",  name:"樓板",     w:4, h:.3,  d:4,   cost:60,  lux:2,  color:0xb9b3a6, top:"stonefloor", side:"concrete", repTop:[2,2]},
+  {id:"roof",  name:"屋頂板",   w:4, h:.35, d:4,   cost:70,  lux:3,  color:0x3a3f4a, top:"roof",       side:"concrete", repTop:[2,2], isRoof:true},
+  {id:"col",   name:"石柱",     w:.5,h:3,   d:.5,  cost:25,  lux:1,  color:0xece6da, tex:"marble",    rep:[.5,1.5]},
+  {id:"cont",  name:"貨櫃屋",   w:6, h:2.6, d:2.5, cost:150, lux:5,  color:0xc2572e, tex:"container", rep:[3,1.3], metalHull:true},
+  {id:"pool",  name:"泳池",     w:4, h:.6,  d:4,   cost:200, lux:10, color:0x3f8fd2, top:"water",      side:"marble",   repTop:[2,2], waterTop:true},
 ];
 const PROTS = [
   {key:"quake",   icon:"🏗️", name:"制震結構", cost:800, desc:"大幅降低地震損失"},
@@ -254,21 +257,21 @@ const PROTS = [
   {key:"fire",    icon:"🧯", name:"消防灑水", cost:250, desc:"大幅降低火災損失"},
   {key:"flood",   icon:"🚧", name:"排水閘門", cost:350, desc:"大幅降低洪水損失"},
 ];
-const MONTHS = 12, MONTH_SECS = 45, RANGE = 23, MAX_Y = 23;
+const MONTHS = 12, MONTH_SECS = 45, RANGE = 30, MAX_Y = 24;
 
 // ─── 天災與事件 ─────────────────────────────────────
 const DISASTERS = [
   {key:"quake",   icon:"🌋", name:"強烈地震", flavor:"芮氏規模 6.8，整片工地劇烈搖晃！",
-   pick:b=>true,            frac:.15, cap:60, cash:300, lightCash:50,
+   pick:u=>true,            frac:.3, cap:8, cash:300, lightCash:50,
    heavyNote:"部分結構崩塌", lightNote:"制震結構發揮作用，僅輕微裂縫"},
   {key:"typhoon", icon:"🌀", name:"超級颱風", flavor:"17 級陣風夾帶豪雨直撲而來！",
-   pick:(b,t)=>t.fragile || b.y>=6, frac:.5, cap:45, cash:200, lightCash:30,
-   heavyNote:"玻璃與高處結構被強風掀落", lightNote:"防颱工法擋下風雨，損失輕微"},
+   pick:(u,T)=>T.fragile || T.isRoof || u.y>=3, frac:.5, cap:8, cash:200, lightCash:30,
+   heavyNote:"玻璃帷幕與屋頂被強風掀落", lightNote:"防颱工法擋下風雨，損失輕微"},
   {key:"fire",    icon:"🔥", name:"電線走火", flavor:"深夜竄出火苗，火勢沿著木造結構蔓延！",
-   pick:(b,t)=>t.flammable, frac:.7, cap:50, cash:300, lightCash:40,
+   pick:(u,T)=>T.flammable, frac:.7, cap:8, cash:300, lightCash:40,
    heavyNote:"木造部分付之一炬", lightNote:"灑水系統即時撲滅，虛驚一場"},
   {key:"flood",   icon:"🌊", name:"暴雨洪災", flavor:"時雨量破百毫米，洪水淹進基地！",
-   pick:b=>b.y===0,         frac:.35, cap:35, cash:250, lightCash:20,
+   pick:u=>u.y<=.4,         frac:.35, cap:6, cash:250, lightCash:20,
    heavyNote:"一樓與低窪處泡水受損", lightNote:"擋水閘門守住了，僅需清理"},
 ];
 const EVENTS = [
@@ -451,6 +454,41 @@ const P = {
     g.fillStyle=gr; g.fillRect(0,0,s,s);
     g.strokeStyle="#8a7347"; g.lineWidth=3; g.strokeRect(2,2,s-4,s-4);
   },
+  door(g,s){
+    g.fillStyle="#d6cfbf"; g.fillRect(0,0,s,s);
+    speckle(g,s,180,["#c2bbab","#e4ddcc"],.4);
+    const dw=s*.3, dx=(s-dw)/2, dy=s*.2;
+    g.fillStyle="#4e3319"; g.fillRect(dx-3, dy-3, dw+6, s-dy+3);
+    g.fillStyle="#6b4522"; g.fillRect(dx, dy, dw, s-dy);
+    g.strokeStyle="rgba(30,17,6,.6)"; g.lineWidth=2;
+    g.strokeRect(dx+4, dy+5, dw-8, (s-dy)*.42);
+    g.strokeRect(dx+4, dy+(s-dy)*.52, dw-8, (s-dy)*.42);
+    g.fillStyle="#d3ae42"; g.beginPath(); g.arc(dx+dw-6, dy+(s-dy)*.5, 2.4, 0, 6.3); g.fill();
+    edge(g,s);
+  },
+  container(g,s){
+    g.fillStyle="#c2572e"; g.fillRect(0,0,s,s);
+    for(let x=0;x<s;x+=8){
+      g.fillStyle="rgba(255,190,150,.16)"; g.fillRect(x,0,3,s);
+      g.fillStyle="rgba(60,20,5,.22)";     g.fillRect(x+5,0,3,s);
+    }
+    for(let i=0;i<7;i++){
+      g.fillStyle=`rgba(70,35,18,${R(.12,.3)})`;
+      g.beginPath(); g.ellipse(R(0,s),R(0,s),R(4,14),R(3,8),R(0,6.3),0,6.3); g.fill();
+    }
+    g.fillStyle="rgba(40,15,5,.5)"; g.fillRect(0,0,s,4); g.fillRect(0,s-4,s,4);
+    edge(g,s);
+  },
+  stonefloor(g,s){
+    g.fillStyle="#a49d8e"; g.fillRect(0,0,s,s);
+    const ts2=s/2;
+    for(let r=0;r<2;r++) for(let c=0;c<2;c++){
+      g.fillStyle=`rgb(${182+R(-16,10)|0},${175+R(-14,10)|0},${160+R(-14,10)|0})`;
+      g.fillRect(c*ts2+2, r*ts2+2, ts2-4, ts2-4);
+    }
+    speckle(g,s,220,["#8f887a","#c8c1b2"],.4);
+    edge(g,s);
+  },
   grass(g,s){
     g.fillStyle="#31402c"; g.fillRect(0,0,s,s);
     speckle(g,s,700,["#3c5233","#2b3a26","#49603a","#26301f"],.6);
@@ -527,26 +565,40 @@ grid.material.transparent = true;
 grid.material.opacity = .22;
 scene.add(grid);
 
-// ─── 方塊材質 ───────────────────────────────────────
-const geo = new THREE.BoxGeometry(1,1,1);
+// ─── 構件材質與幾何 ─────────────────────────────────
 let waterTex;
-const MATS = TYPES.map(t=>{
-  const map = makeTex(P[t.id] || P.concrete);
-  if(t.water) waterTex = map;
-  return new THREE.MeshStandardMaterial({
+function texFor(name, rep){
+  const t = makeTex(P[name]);
+  t.repeat.set(rep[0], rep[1]);
+  return t;
+}
+function stdMat(mapName, rep, o={}){
+  const map = texFor(mapName, rep);
+  const m = new THREE.MeshStandardMaterial({
     map,
-    transparent: !!t.transparent,
-    opacity: t.transparent ? (t.water ? .72 : .55) : 1,
-    depthWrite: !t.transparent,
-    roughness: t.metal ? .32 : t.transparent ? .06 : t.id==="marble" ? .38 : .88,
-    metalness: t.metal ? .9 : 0,
-    emissive: t.emissive ? 0xffd9a0 : 0x000000,
-    emissiveMap: t.emissive ? map : null,
-    emissiveIntensity: t.emissive ? .85 : 0,
-    envMapIntensity: t.metal ? 1.2 : t.transparent ? 1 : .35,
+    transparent: !!o.trans, opacity: o.trans ? .5 : 1, depthWrite: !o.trans,
+    roughness: o.rough ?? .85, metalness: o.metal ?? 0,
+    envMapIntensity: o.env ?? .35,
   });
+  if(o.isWater) waterTex = map;
+  return m;
+}
+const GEOS = TYPES.map(t => new THREE.BoxGeometry(t.w, t.h, t.d));
+const MATS = TYPES.map(t=>{
+  if(t.top){ // 上下不同面：樓板／屋頂／泳池
+    const side = stdMat(t.side, [2,.3]);
+    const top = t.waterTop
+      ? stdMat("water", t.repTop, {rough:.05, env:1, isWater:true})
+      : stdMat(t.top, t.repTop, {rough:t.isRoof ? .7 : .8});
+    return [side, side, top, side, side, side];
+  }
+  const o = {};
+  if(t.transparent){ o.trans = true; o.rough = .06; o.env = 1; }
+  if(t.metalHull){ o.metal = .45; o.rough = .5; o.env = .6; }
+  if(t.id === "wallM" || t.id === "col"){ o.rough = .38; }
+  return stdMat(t.tex, t.rep, o);
 });
-const ghost = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+const ghost = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), new THREE.MeshBasicMaterial({
   color:0xc9a35c, transparent:true, opacity:.28, depthWrite:false}));
 ghost.visible = false;
 scene.add(ghost);
@@ -573,45 +625,62 @@ function fireFlash(){
   setTimeout(()=>{ f.style.transition = "opacity 2.4s"; f.style.opacity = "0"; }, 400);
 }
 
-// ─── 方塊資料 ───────────────────────────────────────
-const key = (x,y,z) => x+","+y+","+z;
-function addBlock(x,y,z,t,silent){
-  const k = key(x,y,z);
-  if(blocks.has(k)) return false;
-  const m = new THREE.Mesh(geo, MATS[t]);
-  m.position.set(x+.5, y+.5, z+.5);
-  m.castShadow = !TYPES[t].transparent;
-  m.receiveShadow = true;
-  m.userData = {x,y,z,t};
-  scene.add(m);
-  blocks.set(k, m);
-  if(!silent){ S.lux += TYPES[t].lux; }
-  return true;
+// ─── 構件資料 ───────────────────────────────────────
+let midSeq = 1;
+function dimsOf(t, r){
+  const T = TYPES[t];
+  return r%2 ? {hx:T.d/2, hz:T.w/2} : {hx:T.w/2, hz:T.d/2};
 }
-function delBlock(k){
-  const m = blocks.get(k);
+function aabbOf(u){
+  const {hx,hz} = dimsOf(u.t, u.rot), T = TYPES[u.t];
+  return {minX:u.cx-hx, maxX:u.cx+hx, minY:u.y, maxY:u.y+T.h, minZ:u.cz-hz, maxZ:u.cz+hz};
+}
+function overlapVol(a,b){
+  const x = Math.min(a.maxX,b.maxX)-Math.max(a.minX,b.minX);
+  const y = Math.min(a.maxY,b.maxY)-Math.max(a.minY,b.minY);
+  const z = Math.min(a.maxZ,b.maxZ)-Math.max(a.minZ,b.minZ);
+  return (x>0 && y>0 && z>0) ? x*y*z : 0;
+}
+function addMod(t, cx, y, cz, r, silent){
+  const T = TYPES[t];
+  const m = new THREE.Mesh(GEOS[t], MATS[t]);
+  m.rotation.y = r*Math.PI/2;
+  m.position.set(cx, y+T.h/2, cz);
+  m.castShadow = !T.transparent;
+  m.receiveShadow = true;
+  const mid = midSeq++;
+  m.userData = {mid, t, cx, y, cz, rot:r};
+  scene.add(m);
+  blocks.set(mid, m);
+  if(!silent) S.lux += T.lux;
+  return m;
+}
+function delMod(mid){
+  const m = blocks.get(mid);
   if(!m) return null;
   scene.remove(m);
-  blocks.delete(k);
+  blocks.delete(mid);
   S.lux -= TYPES[m.userData.t].lux;
   return m.userData;
 }
 function starterPad(){
-  for(let x=-2;x<=2;x++) for(let z=-2;z<=2;z++) addBlock(x,0,z,1,true);
-  S.lux += 25*TYPES[1].lux; S.budget -= 25*TYPES[1].cost;
+  const sl = TYPES.findIndex(t=>t.id==="slab");
+  for(const [x,z] of [[-2,-2],[2,-2],[-2,2],[2,2]]) addMod(sl, x, 0, z, 0, true);
+  S.lux += 4*TYPES[sl].lux; S.budget -= 4*TYPES[sl].cost;
 }
 
 // ─── 視角與移動 ─────────────────────────────────────
-let yaw = 0.46, pitch = -0.24, sel = 1;
+let yaw = 0.46, pitch = -0.24, sel = 1, rot = 0;
 const keys = {};
 addEventListener("keydown", e=>{
   if(e.code==="Space") e.preventDefault();
   if(e.repeat) return;
   keys[e.code] = true;
   if(e.code.startsWith("Digit")){
-    const n = +e.code.slice(5);
-    if(n>=1 && n<=TYPES.length){ sel = n-1; renderHotbar(); }
+    const n = (+e.code.slice(5) + 9) % 10; // 1→0 … 9→8，0→9
+    if(n < TYPES.length){ sel = n; renderHotbar(); }
   }
+  if(e.code==="KeyR") rot = (rot+1)%4;
   if(e.code==="KeyB") openShop();
   if(e.code==="KeyN") skipMonth();
 });
@@ -705,45 +774,64 @@ if(IS_TOUCH){
   $("t-up").addEventListener("touchend",()=>flyUp=0);
   $("t-down").addEventListener("touchstart",e=>{e.preventDefault();flyUp=-1});
   $("t-down").addEventListener("touchend",()=>flyUp=0);
+  $("t-rot").addEventListener("touchstart",e=>{e.preventDefault(); rot=(rot+1)%4;});
 }
 
-// ─── 準星射線 ───────────────────────────────────────
+// ─── 準星射線與構件放置 ─────────────────────────────
 const ray = new THREE.Raycaster();
-ray.far = 9;
-function castHit(){
+ray.far = 14;
+const snap = v => Math.round(v*2)/2;
+function targetPlace(){
   ray.setFromCamera({x:0,y:0}, camera);
-  const list = [...blocks.values(), ground];
-  const hits = ray.intersectObjects(list, false);
-  return hits.length ? hits[0] : null;
-}
-function targetCell(){
-  const h = castHit();
-  if(!h) return null;
+  const hits = ray.intersectObjects([...blocks.values(), ground], false);
+  if(!hits.length) return null;
+  const h = hits[0];
+  const {hx,hz} = dimsOf(sel, rot);
+  let cx, cz, y;
   if(h.object === ground){
-    const x = Math.floor(h.point.x), z = Math.floor(h.point.z);
-    return {place:{x,y:0,z}, hit:null};
+    cx = snap(h.point.x); cz = snap(h.point.z); y = 0;
+    return {hit:null, place:{cx,cz,y}};
   }
-  const d = h.object.userData;
-  const n = h.face.normal;
-  return {place:{x:d.x+n.x, y:d.y+n.y, z:d.z+n.z}, hit:h.object};
+  const u = h.object.userData;
+  const n = h.face.normal.clone().transformDirection(h.object.matrixWorld);
+  n.set(Math.round(n.x), Math.round(n.y), Math.round(n.z));
+  const A = aabbOf(u);
+  if(n.y > 0){          // 頂面：往上疊
+    y = A.maxY; cx = snap(h.point.x); cz = snap(h.point.z);
+  }else if(n.y < 0){    // 底面：不可放
+    return {hit:h.object, place:null};
+  }else{                // 側面：貼著接續，同一個基準高度
+    y = u.y;
+    if(n.x){ cx = snap(n.x>0 ? A.maxX+hx : A.minX-hx); cz = snap(h.point.z); }
+    else   { cz = snap(n.z>0 ? A.maxZ+hz : A.minZ-hz); cx = snap(h.point.x); }
+  }
+  return {hit:h.object, place:{cx,cz,y:Math.round(y*20)/20}};
 }
-function inBounds(p){ return Math.abs(p.x)<=RANGE && Math.abs(p.z)<=RANGE && p.y>=0 && p.y<=MAX_Y; }
-
+function validPlace(p){
+  const T = TYPES[sel], {hx,hz} = dimsOf(sel, rot);
+  if(Math.abs(p.cx)+hx > RANGE || Math.abs(p.cz)+hz > RANGE) return false;
+  if(p.y < 0 || p.y + T.h > MAX_Y) return false;
+  const g = {minX:p.cx-hx, maxX:p.cx+hx, minY:p.y+.02, maxY:p.y+T.h-.02, minZ:p.cz-hz, maxZ:p.cz+hz};
+  for(const m of blocks.values())
+    if(overlapVol(g, aabbOf(m.userData)) > .5) return false; // 允許牆角等薄交疊
+  const c = camera.position; // 不能蓋在自己身上
+  if(c.x>g.minX-.4 && c.x<g.maxX+.4 && c.y>g.minY-.2 && c.y<g.maxY+1.7 && c.z>g.minZ-.4 && c.z<g.maxZ+.4) return false;
+  return true;
+}
 function placeBlock(){
   if(S.over) return;
-  const t = targetCell();
-  if(!t || !inBounds(t.place)) return;
-  const p = t.place, ty = TYPES[sel];
-  const dx = camera.position.x-(p.x+.5), dy = camera.position.y-(p.y+.5), dz = camera.position.z-(p.z+.5);
-  if(dx*dx+dy*dy+dz*dz < 1.6) return; // 不能把方塊放進自己身上
-  if(S.budget < ty.cost){ pushLog("event", `預算不足，「${ty.name}」每塊要 ${W(ty.cost)}。`); renderHUD(); return; }
-  if(addBlock(p.x,p.y,p.z,sel)){ S.budget -= ty.cost; renderHUD(); queueSave(); }
+  const t = targetPlace();
+  if(!t || !t.place || !validPlace(t.place)) return;
+  const T = TYPES[sel];
+  if(S.budget < T.cost){ pushLog("event", `預算不足，「${T.name}」要 ${W(T.cost)}。`); renderHUD(); return; }
+  addMod(sel, t.place.cx, t.place.y, t.place.cz, rot);
+  S.budget -= T.cost; renderHUD(); queueSave();
 }
 function breakBlock(){
   if(S.over) return;
-  const t = targetCell();
+  const t = targetPlace();
   if(!t || !t.hit) return;
-  const d = delBlock(key(t.hit.userData.x, t.hit.userData.y, t.hit.userData.z));
+  const d = delMod(t.hit.userData.mid);
   if(d){ S.budget += Math.floor(TYPES[d.t].cost/2); renderHUD(); queueSave(); } // 拆除退一半
 }
 
@@ -762,7 +850,7 @@ function renderHotbar(){
     const d = document.createElement("div");
     d.className = "slot" + (i===sel ? " sel" : "");
     d.innerHTML = `<div class="chip" style="background:#${t.color.toString(16).padStart(6,"0")}"></div>` +
-      `<div class="n">${t.name}</div><div class="p">${t.cost}萬 <span class="k">${i+1}</span></div>`;
+      `<div class="n">${t.name}</div><div class="p">${t.cost}萬 <span class="k">${(i+1)%10}</span></div>`;
     d.addEventListener("click", ()=>{ sel=i; renderHotbar(); });
     bar.appendChild(d);
   });
@@ -806,13 +894,13 @@ function fireDisaster(){
     for(let i=0;i<n;i++){
       const j = Math.floor(Math.random()*victims.length);
       const [k] = victims.splice(j,1)[0];
-      if(delBlock(k)) removed++;
+      if(delMod(k)) removed++;
     }
   }
   const cash = safe ? d.lightCash : d.cash;
   S.budget -= cash;
   effects.push({text:`修繕費 −${W(cash)}`, good:false});
-  if(removed) effects.push({text:`${removed} 個方塊被摧毀`, good:false});
+  if(removed) effects.push({text:`${removed} 件建築構件被摧毀`, good:false});
   effects.push({text:safe ? d.lightNote : d.heavyNote, good:safe});
   if(d.key==="quake") shakeT = safe ? .6 : 1.6;
   if(d.key==="typhoon" || d.key==="flood") startRain(safe ? 6 : 12);
@@ -906,7 +994,7 @@ function endGame(icon, rank, note, score){
   const rows =
     `<tr><td>豪華度</td><td>${S.lux}</td></tr>` +
     `<tr><td>剩餘預算</td><td>${W(S.budget)}</td></tr>` +
-    `<tr><td>使用方塊</td><td>${blocks.size} 塊</td></tr>` +
+    `<tr><td>建築構件</td><td>${blocks.size} 件</td></tr>` +
     (score!=null ? `<tr><td>總分</td><td>${score}</td></tr>` : "");
   $("modal-root").innerHTML =
     `<div class="overlay"><div class="card ending"><div class="big">${icon}</div>` +
@@ -925,9 +1013,11 @@ function endGame(icon, rank, note, score){
 }
 
 // ─── 存檔 ───────────────────────────────────────────
-const SAVE_KEY = "golden-manor-3d";
+const SAVE_KEY = "golden-manor-3d-v2";
 function snapshot(){
-  return {...S, blocks:[...blocks.values()].map(m=>[m.userData.x,m.userData.y,m.userData.z,m.userData.t])};
+  return {...S, mods:[...blocks.values()].map(m=>{
+    const u = m.userData; return [u.t, u.cx, u.y, u.cz, u.rot];
+  })};
 }
 function queueSave(){
   clearTimeout(saveTimer);
@@ -941,23 +1031,22 @@ function restore(data){
   S = freshS();
   for(const k of Object.keys(S)) if(k in data && k!=="prot") S[k]=data[k];
   if(data.prot) S.prot = {...S.prot, ...data.prot};
-  const luxBefore = S.lux;
-  for(const [x,y,z,t] of data.blocks||[]) addBlock(x,y,z,t,true);
-  S.lux = luxBefore;
+  for(const [t,cx,y,cz,r] of data.mods||[]) addMod(t, cx, y, cz, r||0, true);
 }
 
 // ─── 開始畫面 ───────────────────────────────────────
 function showStart(){
   const ctrl = IS_TOUCH ?
     `<table><tr><td>左搖桿</td><td>移動</td></tr><tr><td>右側拖曳</td><td>轉視角</td></tr>` +
-    `<tr><td>放置／拆除</td><td>對準星處操作</td></tr><tr><td>上升／下降</td><td>飛行</td></tr></table>` :
+    `<tr><td>放置／拆除</td><td>對準星處操作</td></tr><tr><td>旋轉</td><td>轉構件方向</td></tr><tr><td>上升／下降</td><td>飛行</td></tr></table>` :
     `<table><tr><td>W A S D</td><td>移動</td></tr><tr><td>空白鍵 / Shift</td><td>上升 / 下降（飛行）</td></tr>` +
-    `<tr><td>滑鼠</td><td>視角（點畫面鎖定）</td></tr><tr><td>左鍵 / 右鍵</td><td>拆除 / 放置方塊</td></tr>` +
-    `<tr><td>1–9 或滾輪</td><td>選建材</td></tr><tr><td>B / N</td><td>防災工程 / 跳月</td></tr></table>`;
+    `<tr><td>滑鼠</td><td>視角（點畫面鎖定）</td></tr><tr><td>左鍵 / 右鍵</td><td>拆除 / 放置構件</td></tr>` +
+    `<tr><td>R</td><td>旋轉構件方向</td></tr>` +
+    `<tr><td>1–0 或滾輪</td><td>選構件</td></tr><tr><td>B / N</td><td>防災工程 / 跳月</td></tr></table>`;
   $("modal-root").innerHTML =
     `<div class="overlay" id="start"><div class="card">` +
     `<h1>金邸計畫</h1><div class="tag">第一人稱建造版・十二個月・一億預算</div>` +
-    `<p style="font-size:13px">像 Minecraft 一樣一塊一塊蓋出你的豪宅。每 ${MONTH_SECS} 秒過一個月，` +
+    `<p style="font-size:13px">用一面面牆、樓板、玻璃帷幕——甚至整個貨櫃，組裝出你的豪宅。每 ${MONTH_SECS} 秒過一個月，` +
     `小心突發事件與天災——先做防災工程能保住你的心血。</p>` + ctrl +
     `<button class="main" id="go">開始建造</button>` +
     `<div class="foot">比較喜歡 2D 經營版？<a href="classic.html">點這裡</a></div></div></div>`;
@@ -993,10 +1082,13 @@ function tick(){
     $("monthfill").style.width = Math.min(100, monthT/MONTH_SECS*100)+"%";
     if(monthT >= MONTH_SECS) advanceMonth();
 
-    // 預覽鬼影
-    const t = targetCell();
-    if(t && inBounds(t.place) && !blocks.has(key(t.place.x,t.place.y,t.place.z))){
-      ghost.position.set(t.place.x+.5, t.place.y+.5, t.place.z+.5);
+    // 預覽鬼影（金色＝可放，紅色＝不可）
+    const t = targetPlace();
+    if(t && t.place){
+      const T = TYPES[sel], {hx,hz} = dimsOf(sel, rot);
+      ghost.scale.set(hx*2, T.h, hz*2);
+      ghost.position.set(t.place.cx, t.place.y+T.h/2, t.place.cz);
+      ghost.material.color.set(validPlace(t.place) ? 0xc9a35c : 0xd9564a);
       ghost.visible = true;
     }else ghost.visible = false;
   }else ghost.visible = false;
@@ -1038,7 +1130,7 @@ function boot(data){
   if(!data){
     try{ data = JSON.parse(localStorage.getItem(SAVE_KEY)); }catch(e){ data = null; }
   }
-  if(data && data.blocks && !data.over){ restore(data); }
+  if(data && data.mods && !data.over){ restore(data); }
   else{ S = freshS(); starterPad(); }
   renderHUD(); renderHotbar(); showStart(); tick();
 }
