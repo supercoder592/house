@@ -1,10 +1,9 @@
-<title>金邸計畫</title>
+<title>金邸計畫 3D</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;900&family=Noto+Sans+TC:wght@400;500;700&display=swap">
 <style>
   :root{
     --ink:#111318;
-    --panel:#1a1d25;
-    --panel-2:#20242e;
+    --panel:rgba(17,19,24,.82);
     --line:#32363f;
     --gold:#c9a35c;
     --gold-soft:#8a7347;
@@ -12,468 +11,762 @@
     --muted:#9a9689;
     --good:#7fb98a;
     --bad:#d97b6c;
-    --radius:10px;
   }
-  *{box-sizing:border-box}
+  *{box-sizing:border-box;user-select:none;-webkit-user-select:none}
+  html,body{height:100%}
   body{
-    margin:0;
-    background:var(--ink);
-    color:var(--ivory);
+    margin:0;background:var(--ink);color:var(--ivory);
     font-family:"Noto Sans TC",-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif;
-    font-size:15px;
-    line-height:1.6;
-    padding-block:0 48px;
-    padding-inline:20px;
+    font-size:15px;line-height:1.6;overflow:hidden;
+    padding-block:0;padding-inline:0;
   }
-  header.masthead{
-    max-width:1180px;margin:0 auto;
-    padding-block:28px 20px;
-    display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;
-    border-bottom:1px solid var(--line);
-  }
-  .masthead h1{
-    font-family:"Noto Serif TC","Noto Sans TC",serif;
-    font-weight:900;font-size:clamp(26px,4vw,38px);
-    margin:0;letter-spacing:.06em;color:var(--gold);
-    text-wrap:balance;
-  }
-  .masthead .tagline{color:#9a9689;font-size:13px;letter-spacing:.12em}
-  .board{
-    max-width:1180px;margin:20px auto 0;
-    display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:20px;
-  }
-  @media (max-width:860px){.board{grid-template-columns:minmax(0,1fr)}}
+  #app{position:fixed;inset:0}
+  canvas{display:block}
 
-  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
-  .panel h2{
-    font-family:"Noto Serif TC",serif;font-weight:600;font-size:16px;
-    margin:0 0 12px;color:var(--gold);letter-spacing:.14em;
+  /* ── HUD ── */
+  .hud{position:fixed;z-index:5;pointer-events:none}
+  #stats{
+    top:12px;left:12px;display:flex;gap:10px;flex-wrap:wrap;max-width:calc(100vw - 24px);
   }
-
-  /* ── 狀態列 ── */
-  .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:20px}
-  @media (max-width:520px){.stats{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}}
-  .stat{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px}
-  .stat .label{font-size:11px;letter-spacing:.18em;color:#9a9689;text-transform:uppercase}
+  .stat{
+    background:var(--panel);border:1px solid var(--line);border-radius:8px;
+    padding:6px 12px;min-width:96px;backdrop-filter:blur(4px);
+  }
+  .stat .label{font-size:10px;letter-spacing:.18em;color:var(--muted)}
   .stat .value{
-    font-family:"Noto Serif TC",serif;font-weight:900;font-size:clamp(18px,3vw,26px);
-    font-variant-numeric:tabular-nums;margin-top:2px;
+    font-family:"Noto Serif TC",serif;font-weight:900;font-size:17px;
+    font-variant-numeric:tabular-nums;color:var(--gold);line-height:1.3;
   }
   .stat .value.debt{color:var(--bad)}
-  .stat .value.gold{color:var(--gold)}
+  .stat .value.plain{color:var(--ivory)}
+  #monthbar{height:3px;background:var(--line);border-radius:2px;margin-top:4px;overflow:hidden}
+  #monthbar i{display:block;height:100%;background:var(--gold);width:0%}
 
-  /* ── 豪宅視圖 ── */
-  .estate{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
-  @media (max-width:520px){.estate{grid-template-columns:repeat(3,minmax(0,1fr))}}
-  .lot{
-    aspect-ratio:1;border:1px dashed var(--line);border-radius:8px;
-    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
-    background:var(--panel-2);padding:6px;text-align:center;min-width:0;
+  #protbar{top:12px;right:12px;display:flex;gap:6px}
+  .prot{
+    background:var(--panel);border:1px solid var(--line);border-radius:8px;
+    width:38px;height:38px;display:flex;align-items:center;justify-content:center;
+    font-size:18px;opacity:.32;backdrop-filter:blur(4px);
   }
-  .lot.empty{opacity:.35;font-size:12px;color:#9a9689}
-  .lot.built{border:1px solid var(--gold-soft);background:#242018}
-  .lot.damaged{border:1px solid var(--bad);background:#2a1c1a}
-  .lot .icon{font-size:clamp(20px,4vw,28px);line-height:1}
-  .lot .name{font-size:11px;line-height:1.3;color:var(--ivory)}
-  .lot.damaged .name{color:var(--bad)}
-  .lot .tag{font-size:10px;color:#9a9689}
+  .prot.on{opacity:1;border-color:var(--gold-soft)}
 
-  /* ── 商店 ── */
-  .shop{display:flex;flex-direction:column;gap:8px;max-height:430px;overflow-y:auto;padding-right:4px}
-  .item{
-    display:flex;align-items:center;gap:10px;
-    background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;
+  #crosshair{
+    top:50%;left:50%;transform:translate(-50%,-50%);
+    width:18px;height:18px;
   }
-  .item .icon{font-size:20px;flex:0 0 auto}
-  .item .info{flex:1;min-width:0}
-  .item .info .n{font-weight:700;font-size:14px}
-  .item .info .d{font-size:12px;color:#9a9689}
-  .item .price{font-variant-numeric:tabular-nums;font-size:13px;color:var(--gold);white-space:nowrap}
-  .item button{
-    flex:0 0 auto;border:1px solid var(--gold-soft);background:transparent;color:var(--gold);
-    border-radius:6px;padding:5px 14px;font-family:inherit;font-size:13px;cursor:pointer;
+  #crosshair::before,#crosshair::after{
+    content:"";position:absolute;background:rgba(239,233,220,.85);
   }
-  .item button:hover:not(:disabled){background:var(--gold);color:var(--ink)}
-  .item button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
-  .item button:disabled{opacity:.35;cursor:not-allowed}
-  .item.owned{border-color:var(--gold-soft)}
-  .item.owned .price{color:var(--good)}
+  #crosshair::before{left:8px;top:0;width:2px;height:18px}
+  #crosshair::after{top:8px;left:0;width:18px;height:2px}
 
-  .cat-label{font-size:11px;letter-spacing:.2em;color:#9a9689;margin:10px 0 2px}
-  .cat-label:first-child{margin-top:0}
-
-  /* ── 行動列 ── */
-  .actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:16px}
-  .btn-next{
-    font-family:"Noto Serif TC",serif;font-weight:600;font-size:16px;letter-spacing:.14em;
-    background:var(--gold);color:var(--ink);border:none;border-radius:8px;
-    padding:12px 28px;cursor:pointer;
+  #logfeed{
+    left:12px;bottom:86px;display:flex;flex-direction:column;gap:4px;max-width:min(400px,70vw);
   }
-  .btn-next:hover:not(:disabled){filter:brightness(1.1)}
-  .btn-next:focus-visible{outline:2px solid var(--ivory);outline-offset:2px}
-  .btn-next:disabled{opacity:.4;cursor:not-allowed}
-  .hint{font-size:12px;color:#9a9689}
-
-  /* ── 日誌 ── */
-  .log{display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto}
-  .entry{
-    border-left:3px solid var(--line);padding:6px 10px;font-size:13px;
-    background:var(--panel-2);border-radius:0 6px 6px 0;
+  #logfeed .entry{
+    background:var(--panel);border-left:3px solid var(--line);border-radius:0 6px 6px 0;
+    padding:3px 10px;font-size:12px;backdrop-filter:blur(4px);
   }
-  .entry .m{font-size:11px;color:#9a9689;letter-spacing:.1em}
-  .entry.event{border-left-color:var(--gold)}
-  .entry.disaster{border-left-color:var(--bad)}
-  .entry.gain{border-left-color:var(--good)}
+  #logfeed .entry.event{border-left-color:var(--gold)}
+  #logfeed .entry.disaster{border-left-color:var(--bad)}
+  #logfeed .entry.gain{border-left-color:var(--good)}
 
-  /* ── 事件卡 ── */
+  #hotbar{
+    bottom:12px;left:50%;transform:translateX(-50%);
+    display:flex;gap:6px;pointer-events:auto;max-width:calc(100vw - 16px);
+    overflow-x:auto;padding:2px;
+  }
+  .slot{
+    background:var(--panel);border:2px solid var(--line);border-radius:8px;
+    width:58px;flex:0 0 auto;padding:5px 3px 3px;text-align:center;cursor:pointer;
+    backdrop-filter:blur(4px);
+  }
+  .slot.sel{border-color:var(--gold)}
+  .slot .chip{width:22px;height:22px;border-radius:4px;margin:0 auto 2px;border:1px solid rgba(0,0,0,.35)}
+  .slot .n{font-size:10px;line-height:1.2;white-space:nowrap}
+  .slot .p{font-size:9px;color:var(--gold);font-variant-numeric:tabular-nums}
+  .slot .k{position:relative;top:-2px;font-size:8px;color:var(--muted)}
+
+  #btns{right:12px;bottom:12px;display:flex;flex-direction:column;gap:8px;pointer-events:auto}
+  .hbtn{
+    background:var(--panel);border:1px solid var(--gold-soft);color:var(--gold);
+    border-radius:8px;padding:8px 14px;font-family:inherit;font-size:13px;cursor:pointer;
+    backdrop-filter:blur(4px);
+  }
+  .hbtn:hover{background:var(--gold);color:var(--ink)}
+  .hbtn:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+  /* ── 觸控 ── */
+  #touchui{display:none}
+  @media (pointer:coarse){
+    #touchui{display:block;pointer-events:none}
+    #joy{
+      position:fixed;left:18px;bottom:120px;width:110px;height:110px;border-radius:50%;
+      border:2px solid rgba(239,233,220,.35);pointer-events:auto;z-index:6;
+    }
+    #joy i{
+      position:absolute;left:50%;top:50%;width:44px;height:44px;border-radius:50%;
+      background:rgba(201,163,92,.5);transform:translate(-50%,-50%);
+    }
+    .tbtn{
+      position:fixed;z-index:6;pointer-events:auto;
+      background:var(--panel);border:1px solid var(--gold-soft);color:var(--ivory);
+      border-radius:10px;width:56px;height:48px;font-size:13px;font-family:inherit;
+    }
+    #t-place{right:16px;bottom:190px;border-color:var(--good)}
+    #t-break{right:16px;bottom:134px;border-color:var(--bad)}
+    #t-up{right:82px;bottom:190px}
+    #t-down{right:82px;bottom:134px}
+  }
+
+  /* ── 卡片與遮罩 ── */
   .overlay{
-    position:fixed;inset:0;background:rgba(8,9,12,.8);
-    display:flex;align-items:center;justify-content:center;padding:20px;z-index:10;
+    position:fixed;inset:0;background:rgba(8,9,12,.78);z-index:20;
+    display:flex;align-items:center;justify-content:center;padding:20px;
   }
   .card{
-    background:var(--panel);border:1px solid var(--gold-soft);border-radius:14px;
-    max-width:420px;width:100%;padding:28px;text-align:center;
+    background:#1a1d25;border:1px solid var(--gold-soft);border-radius:14px;
+    max-width:440px;width:100%;padding:26px;text-align:center;
+    max-height:88vh;overflow-y:auto;
   }
   .card.disaster{border-color:var(--bad)}
-  .card .big{font-size:52px;line-height:1;margin-bottom:12px}
+  .card .big{font-size:50px;line-height:1;margin-bottom:10px}
   .card h3{
-    font-family:"Noto Serif TC",serif;font-weight:900;font-size:24px;margin:0 0 10px;
+    font-family:"Noto Serif TC",serif;font-weight:900;font-size:23px;margin:0 0 8px;
     color:var(--gold);letter-spacing:.1em;text-wrap:balance;
   }
   .card.disaster h3{color:var(--bad)}
-  .card p{margin:0 0 6px;color:var(--ivory)}
-  .card .effect{font-variant-numeric:tabular-nums;font-weight:700;margin-top:10px}
+  .card p{margin:0 0 6px}
+  .card .effect{font-variant-numeric:tabular-nums;font-weight:700;margin-top:8px}
   .card .effect.bad{color:var(--bad)}
   .card .effect.good{color:var(--good)}
-  .card button{
-    margin-top:20px;background:var(--gold);color:var(--ink);border:none;border-radius:8px;
-    padding:10px 32px;font-family:"Noto Serif TC",serif;font-weight:600;font-size:15px;
+  .card button.main{
+    margin-top:18px;background:var(--gold);color:var(--ink);border:none;border-radius:8px;
+    padding:10px 30px;font-family:"Noto Serif TC",serif;font-weight:600;font-size:15px;
     letter-spacing:.14em;cursor:pointer;
   }
-  .card.disaster button{background:var(--bad)}
+  .card.disaster button.main{background:var(--bad)}
   .card button:focus-visible{outline:2px solid var(--ivory);outline-offset:2px}
 
-  /* ── 結局 ── */
-  .ending .rank{
-    font-family:"Noto Serif TC",serif;font-weight:900;font-size:34px;color:var(--gold);
-    margin:8px 0;letter-spacing:.08em;
+  /* 防災商店 */
+  .shoprow{
+    display:flex;align-items:center;gap:10px;text-align:left;
+    background:#20242e;border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin-top:8px;
   }
-  .ending table{margin:14px auto 0;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  .shoprow .ic{font-size:20px}
+  .shoprow .inf{flex:1;min-width:0}
+  .shoprow .inf .n{font-weight:700;font-size:14px}
+  .shoprow .inf .d{font-size:12px;color:var(--muted)}
+  .shoprow button{
+    border:1px solid var(--gold-soft);background:transparent;color:var(--gold);border-radius:6px;
+    padding:5px 12px;font-family:inherit;font-size:13px;cursor:pointer;white-space:nowrap;
+  }
+  .shoprow button:disabled{opacity:.4;cursor:not-allowed}
+  .shoprow.owned{border-color:var(--gold-soft)}
+
+  /* 開始畫面 */
+  #start h1{
+    font-family:"Noto Serif TC",serif;font-weight:900;font-size:34px;margin:0 0 2px;
+    color:var(--gold);letter-spacing:.1em;
+  }
+  #start .tag{font-size:12px;letter-spacing:.2em;color:var(--muted);margin-bottom:14px}
+  #start table{margin:0 auto;border-collapse:collapse;font-size:13px}
+  #start td{padding:2px 10px;text-align:left}
+  #start td:first-child{color:var(--gold);white-space:nowrap;font-variant-numeric:tabular-nums}
+  #start .foot{margin-top:14px;font-size:12px;color:var(--muted)}
+  #start a{color:var(--gold)}
+
+  .ending .rank{
+    font-family:"Noto Serif TC",serif;font-weight:900;font-size:32px;color:var(--gold);
+    margin:6px 0;letter-spacing:.08em;
+  }
+  .ending table{margin:12px auto 0;border-collapse:collapse;font-variant-numeric:tabular-nums}
   .ending td{padding:3px 12px;font-size:14px;text-align:left}
   .ending td:last-child{text-align:right;color:var(--gold)}
 
-  @media (prefers-reduced-motion:no-preference){
-    .card{animation:pop .25s ease-out}
-    @keyframes pop{from{transform:scale(.92);opacity:0}to{transform:scale(1);opacity:1}}
+  #hint{
+    top:14%;left:50%;transform:translateX(-50%);
+    background:var(--panel);border:1px solid var(--line);border-radius:8px;
+    padding:6px 16px;font-size:13px;backdrop-filter:blur(4px);white-space:nowrap;
   }
 </style>
 
-<header class="masthead">
-  <h1>金邸計畫</h1>
-  <span class="tagline">十二個月・一億預算・打造傳世豪邸</span>
-</header>
+<div id="app"></div>
 
-<div class="board" style="max-width:1180px;margin-inline:auto">
-  <div>
-    <div class="stats">
-      <div class="stat"><div class="label">預算</div><div class="value gold" id="stat-budget">10,000萬</div></div>
-      <div class="stat"><div class="label">豪華度</div><div class="value" id="stat-luxury">0</div></div>
-      <div class="stat"><div class="label">進度</div><div class="value" id="stat-month">第 1 月</div></div>
-    </div>
+<div class="hud" id="stats">
+  <div class="stat"><div class="label">預算</div><div class="value" id="s-budget">10,000萬</div></div>
+  <div class="stat"><div class="label">豪華度</div><div class="value plain" id="s-lux">0</div></div>
+  <div class="stat"><div class="label">進度</div><div class="value plain" id="s-month">第 1 月</div>
+    <div id="monthbar"><i id="monthfill"></i></div></div>
+</div>
+<div class="hud" id="protbar">
+  <div class="prot" id="p-quake"   title="制震結構">🏗️</div>
+  <div class="prot" id="p-typhoon" title="防颱工法">🪟</div>
+  <div class="prot" id="p-fire"    title="消防灑水">🧯</div>
+  <div class="prot" id="p-flood"   title="排水閘門">🚧</div>
+</div>
+<div class="hud" id="crosshair"></div>
+<div class="hud" id="logfeed"></div>
+<div class="hud" id="hotbar"></div>
+<div class="hud" id="btns">
+  <button class="hbtn" id="btn-shop">防災工程 (B)</button>
+  <button class="hbtn" id="btn-skip">跳到下個月 (N)</button>
+</div>
+<div class="hud" id="hint" hidden></div>
 
-    <div class="panel" style="margin-bottom:20px">
-      <h2>宅邸現況</h2>
-      <div class="estate" id="estate"></div>
-      <div class="actions">
-        <button class="btn-next" id="btn-next">進入下個月</button>
-        <span class="hint">每月可建造任意數量的設施；時間推進時可能發生事件或天災。</span>
-      </div>
-    </div>
-
-    <div class="panel">
-      <h2>營造日誌</h2>
-      <div class="log" id="log"></div>
-    </div>
-  </div>
-
-  <div class="panel">
-    <h2>營造型錄</h2>
-    <div class="shop" id="shop"></div>
-  </div>
+<div id="touchui">
+  <div id="joy"><i></i></div>
+  <button class="tbtn" id="t-place">放置</button>
+  <button class="tbtn" id="t-break">拆除</button>
+  <button class="tbtn" id="t-up">上升</button>
+  <button class="tbtn" id="t-down">下降</button>
 </div>
 
 <div id="modal-root"></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.147.0/three.min.js"></script>
 <script>
 "use strict";
 const W = v => v.toLocaleString("zh-TW") + "萬";
+const $ = id => document.getElementById(id);
+const IS_TOUCH = matchMedia("(pointer:coarse)").matches;
 
-// ─── 型錄 ───────────────────────────────────────────
-// protect: 對應天災 key；outdoor/basement: 天災易損標記
-const CATALOG = [
-  {id:"seismic",  cat:"防災工程", icon:"🏗️", name:"制震結構",       cost:800,  lux:3,  protect:"quake",   desc:"大幅降低地震損失"},
-  {id:"storm",    cat:"防災工程", icon:"🪟", name:"防颱氣密窗",     cost:300,  lux:2,  protect:"typhoon", desc:"大幅降低颱風損失"},
-  {id:"sprinkler",cat:"防災工程", icon:"🧯", name:"消防灑水系統",   cost:250,  lux:1,  protect:"fire",    desc:"大幅降低火災損失"},
-  {id:"drainage", cat:"防災工程", icon:"🚧", name:"排水與擋水閘門", cost:350,  lux:1,  protect:"flood",   desc:"大幅降低洪水損失"},
-  {id:"hall",     cat:"主體空間", icon:"🏛️", name:"挑高迎賓大廳",   cost:1200, lux:18, desc:"氣派的兩層樓門面"},
-  {id:"master",   cat:"主體空間", icon:"🛏️", name:"主臥套房",       cost:900,  lux:14, desc:"更衣室與湯屋一應俱全"},
-  {id:"kitchen",  cat:"主體空間", icon:"🍳", name:"米其林級廚房",   cost:780,  lux:13, desc:"中島、雙烤箱、專業爐具"},
-  {id:"garage",   cat:"主體空間", icon:"🏎️", name:"跑車展示車庫",   cost:1100, lux:17, desc:"旋轉展示台與玻璃帷幕"},
-  {id:"pool",     cat:"休閒設施", icon:"🏊", name:"無邊際泳池",     cost:1500, lux:22, outdoor:true, basement:false, desc:"戶外設施，颱風與洪水易受損"},
-  {id:"cinema",   cat:"休閒設施", icon:"🎬", name:"家庭劇院",       cost:850,  lux:15, desc:"4K 雷射投影與環繞音響"},
-  {id:"cellar",   cat:"休閒設施", icon:"🍷", name:"私人酒窖",       cost:700,  lux:12, basement:true, desc:"地下空間，洪水易受損"},
-  {id:"gym",      cat:"休閒設施", icon:"🧖", name:"健身房與 SPA",   cost:650,  lux:11, desc:"私人教練級器材"},
-  {id:"library",  cat:"休閒設施", icon:"📚", name:"典藏圖書室",     cost:480,  lux:9,  desc:"胡桃木書牆與壁爐"},
-  {id:"garden",   cat:"景觀造園", icon:"🎋", name:"日式枯山水庭園", cost:550,  lux:10, outdoor:true, desc:"戶外設施，颱風易受損"},
-  {id:"skygarden",cat:"景觀造園", icon:"🌿", name:"空中花園",       cost:950,  lux:16, outdoor:true, desc:"戶外設施，颱風易受損"},
-  {id:"smart",    cat:"景觀造園", icon:"🤖", name:"智慧家居系統",   cost:400,  lux:8,  desc:"全屋自動化，可能獲政府補助"},
+// ─── 方塊型錄（cost 單位：萬）────────────────────────
+const TYPES = [
+  {id:"concrete", name:"混凝土", cost:5,  lux:1, color:0x8f959e},
+  {id:"marble",   name:"大理石", cost:20, lux:3, color:0xece5d6},
+  {id:"wood",     name:"原木",   cost:8,  lux:1, color:0x8a5a33, flammable:true},
+  {id:"brick",    name:"紅磚",   cost:6,  lux:1, color:0xb0493f},
+  {id:"glass",    name:"玻璃",   cost:15, lux:2, color:0x9fd8ef, transparent:true, fragile:true},
+  {id:"roof",     name:"黑瓦",   cost:10, lux:1, color:0x3a3f4a},
+  {id:"gold",     name:"金磚",   cost:80, lux:8, color:0xd4af37, metal:true},
+  {id:"water",    name:"池水",   cost:12, lux:2, color:0x3f8fd2, transparent:true, water:true},
+  {id:"light",    name:"燈飾",   cost:25, lux:3, color:0xffe9b0, emissive:true},
 ];
-const BY_ID = Object.fromEntries(CATALOG.map(c=>[c.id,c]));
-const MONTHS = 12;
+const PROTS = [
+  {key:"quake",   icon:"🏗️", name:"制震結構", cost:800, desc:"大幅降低地震損失"},
+  {key:"typhoon", icon:"🪟", name:"防颱工法", cost:300, desc:"大幅降低颱風損失"},
+  {key:"fire",    icon:"🧯", name:"消防灑水", cost:250, desc:"大幅降低火災損失"},
+  {key:"flood",   icon:"🚧", name:"排水閘門", cost:350, desc:"大幅降低洪水損失"},
+];
+const MONTHS = 12, MONTH_SECS = 45, RANGE = 23, MAX_Y = 23;
 
-// ─── 天災 ───────────────────────────────────────────
+// ─── 天災與事件 ─────────────────────────────────────
 const DISASTERS = [
-  {key:"quake",   icon:"🌋", name:"強烈地震", flavor:"芮氏規模 6.8 的地震襲來，整座宅邸劇烈搖晃。",
-   heavy:{cash:800, lux:15, note:"結構受損嚴重"}, light:{cash:50, note:"制震結構發揮作用，僅輕微裂縫"}},
-  {key:"typhoon", icon:"🌀", name:"超級颱風", flavor:"17 級陣風夾帶豪雨直撲而來。",
-   heavy:{cash:500, lux:10, hitTag:"outdoor", note:"戶外設施遭強風摧殘"}, light:{cash:30, note:"氣密窗擋下風雨，損失輕微"}},
-  {key:"fire",    icon:"🔥", name:"電線走火", flavor:"深夜配電箱竄出火苗，火勢一度蔓延。",
-   heavy:{cash:700, lux:12, note:"火勢波及多個房間"}, light:{cash:40, note:"灑水系統即時撲滅，虛驚一場"}},
-  {key:"flood",   icon:"🌊", name:"暴雨洪災", flavor:"時雨量破百毫米，街道成河，洪水湧向宅邸。",
-   heavy:{cash:600, lux:10, hitTag:"basement", note:"地下與低窪空間泡水"}, light:{cash:20, note:"擋水閘門守住了，僅需清理"}},
+  {key:"quake",   icon:"🌋", name:"強烈地震", flavor:"芮氏規模 6.8，整片工地劇烈搖晃！",
+   pick:b=>true,            frac:.15, cap:60, cash:300, lightCash:50,
+   heavyNote:"部分結構崩塌", lightNote:"制震結構發揮作用，僅輕微裂縫"},
+  {key:"typhoon", icon:"🌀", name:"超級颱風", flavor:"17 級陣風夾帶豪雨直撲而來！",
+   pick:(b,t)=>t.fragile || b.y>=6, frac:.5, cap:45, cash:200, lightCash:30,
+   heavyNote:"玻璃與高處結構被強風掀落", lightNote:"防颱工法擋下風雨，損失輕微"},
+  {key:"fire",    icon:"🔥", name:"電線走火", flavor:"深夜竄出火苗，火勢沿著木造結構蔓延！",
+   pick:(b,t)=>t.flammable, frac:.7, cap:50, cash:300, lightCash:40,
+   heavyNote:"木造部分付之一炬", lightNote:"灑水系統即時撲滅，虛驚一場"},
+  {key:"flood",   icon:"🌊", name:"暴雨洪災", flavor:"時雨量破百毫米，洪水淹進基地！",
+   pick:b=>b.y===0,         frac:.35, cap:35, cash:250, lightCash:20,
+   heavyNote:"一樓與低窪處泡水受損", lightNote:"擋水閘門守住了，僅需清理"},
 ];
-
-// ─── 突發事件 ───────────────────────────────────────
 const EVENTS = [
-  {icon:"📈", name:"建材大漲",   flavor:"國際原物料飆漲，營造行情跟著水漲船高。", cash:-250},
-  {icon:"👷", name:"工班罷工",   flavor:"工班集體停工爭取加薪，你付了補貼才復工。", cash:-150},
-  {icon:"💧", name:"水管爆裂",   flavor:"施工不慎打破主水管，地板重做。", cash:-120},
+  {icon:"📈", name:"建材大漲",   flavor:"國際原物料飆漲，補付材料差額。", cash:-250},
+  {icon:"👷", name:"工班罷工",   flavor:"工班停工爭取加薪，你付了補貼才復工。", cash:-150},
+  {icon:"💧", name:"水管爆裂",   flavor:"施工不慎打破主水管，重做管線。", cash:-120},
   {icon:"📢", name:"鄰居抗議",   flavor:"施工噪音引來抗議，你送上禮盒與補償金。", cash:-180},
   {icon:"💰", name:"繼承遺產",   flavor:"遠房親戚留給你一筆意外之財。", cash:500},
-  {icon:"📊", name:"股票大賺",   flavor:"你手上的持股漲停三天，果斷獲利了結。", cash:350},
-  {icon:"🏆", name:"名師操刀",   flavor:"國際建築大師路過驚豔，免費幫你微調設計。", lux:8},
-  {icon:"📰", name:"雜誌專訪",   flavor:"居家雜誌以你的宅邸做封面故事，名利雙收。", lux:5, cash:200},
-  {icon:"🌱", name:"綠建築補助", flavor:"政府審核通過智慧節能補助。", cash:300, need:"smart",
-   fallbackFlavor:"政府綠建築補助開放申請，可惜你沒有智慧家居系統，資格不符。"},
+  {icon:"📊", name:"股票大賺",   flavor:"持股連拉三根漲停，果斷獲利了結。", cash:350},
+  {icon:"🏆", name:"名師操刀",   flavor:"國際建築大師路過驚豔，免費微調設計。", lux:30},
+  {icon:"📰", name:"雜誌專訪",   flavor:"居家雜誌以你的宅邸做封面故事。", lux:20, cash:200},
 ];
 
-// ─── 遊戲狀態 ───────────────────────────────────────
-let S;
-function freshState(){
-  return {budget:10000, lux:0, month:1, built:[], damaged:[], log:[], over:false};
+// ─── 狀態 ───────────────────────────────────────────
+let S, blocks, paused = true, started = false, monthT = 0, shakeT = 0, saveTimer = null;
+function freshS(){ return {budget:10000, lux:0, month:1, over:false,
+  prot:{quake:false, typhoon:false, fire:false, flood:false}}; }
+
+// ─── Three.js 場景 ──────────────────────────────────
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x151d2c);
+scene.fog = new THREE.Fog(0x151d2c, 40, 110);
+const camera = new THREE.PerspectiveCamera(72, innerWidth/innerHeight, .1, 300);
+camera.position.set(6, 4, 12);
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+$("app").appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0x8fa3c9, 0x3a3427, .75));
+const sun = new THREE.DirectionalLight(0xe8c88a, .9);
+sun.position.set(30, 45, 18);
+scene.add(sun);
+
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(300, 300),
+  new THREE.MeshLambertMaterial({color:0x2c3b2a}));
+ground.rotation.x = -Math.PI/2;
+scene.add(ground);
+const grid = new THREE.GridHelper(RANGE*2+2, RANGE*2+2, 0x8a7347, 0x39424f);
+grid.position.y = .01;
+scene.add(grid);
+
+const geo = new THREE.BoxGeometry(1,1,1);
+const MATS = TYPES.map(t => new THREE.MeshLambertMaterial({
+  color:t.color,
+  transparent:!!t.transparent, opacity:t.transparent ? .5 : 1,
+  emissive:t.emissive ? 0xd9a94f : 0x000000,
+}));
+const ghost = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+  color:0xc9a35c, transparent:true, opacity:.28}));
+ghost.visible = false;
+scene.add(ghost);
+
+// ─── 方塊資料 ───────────────────────────────────────
+const key = (x,y,z) => x+","+y+","+z;
+function addBlock(x,y,z,t,silent){
+  const k = key(x,y,z);
+  if(blocks.has(k)) return false;
+  const m = new THREE.Mesh(geo, MATS[t]);
+  m.position.set(x+.5, y+.5, z+.5);
+  m.userData = {x,y,z,t};
+  scene.add(m);
+  blocks.set(k, m);
+  if(!silent){ S.lux += TYPES[t].lux; }
+  return true;
+}
+function delBlock(k){
+  const m = blocks.get(k);
+  if(!m) return null;
+  scene.remove(m);
+  blocks.delete(k);
+  S.lux -= TYPES[m.userData.t].lux;
+  return m.userData;
+}
+function starterPad(){
+  for(let x=-2;x<=2;x++) for(let z=-2;z<=2;z++) addBlock(x,0,z,1,true);
+  S.lux += 25*TYPES[1].lux; S.budget -= 25*TYPES[1].cost;
 }
 
-const $ = id => document.getElementById(id);
-const hasProtect = key => S.built.some(id => BY_ID[id].protect === key);
+// ─── 視角與移動 ─────────────────────────────────────
+let yaw = -0.45, pitch = -0.18, sel = 1;
+const keys = {};
+addEventListener("keydown", e=>{
+  if(e.code==="Space") e.preventDefault();
+  if(e.repeat) return;
+  keys[e.code] = true;
+  if(e.code.startsWith("Digit")){
+    const n = +e.code.slice(5);
+    if(n>=1 && n<=TYPES.length){ sel = n-1; renderHotbar(); }
+  }
+  if(e.code==="KeyB") openShop();
+  if(e.code==="KeyN") skipMonth();
+});
+addEventListener("keyup", e=>keys[e.code]=false);
+addEventListener("wheel", e=>{
+  if(!started || paused) return;
+  sel = (sel + (e.deltaY>0?1:-1) + TYPES.length) % TYPES.length;
+  renderHotbar();
+});
 
-function addLog(cls, text){
-  S.log.unshift({m:S.month, cls, text});
+const cv = renderer.domElement;
+let locked = false, dragging = false, dragMoved = 0, lx=0, ly=0;
+document.addEventListener("pointerlockchange", ()=>{
+  locked = document.pointerLockElement === cv;
+  showHint(locked ? "" : started && !paused ? "點擊畫面回到遊戲" : "");
+});
+function tryLock(){ cv.requestPointerLock && cv.requestPointerLock(); }
+function look(mx,my){
+  yaw   -= mx*0.0023;
+  pitch -= my*0.0023;
+  pitch = Math.max(-1.45, Math.min(1.45, pitch));
 }
-
-// ─── 畫面 ───────────────────────────────────────────
-function render(){
-  $("stat-budget").textContent = W(S.budget);
-  $("stat-budget").className = "value " + (S.budget < 0 ? "debt" : "gold");
-  $("stat-luxury").textContent = S.lux;
-  $("stat-month").textContent = S.over ? "完工" : `第 ${S.month} 月`;
-  $("btn-next").disabled = S.over;
-  $("btn-next").textContent = S.month >= MONTHS ? "驗收完工" : "進入下個月";
-
-  // 宅邸格
-  const estate = $("estate");
-  estate.innerHTML = "";
-  const slots = Math.max(8, Math.ceil(S.built.length/4)*4);
-  for(let i=0;i<slots;i++){
-    const div = document.createElement("div");
-    const id = S.built[i];
-    if(id){
-      const it = BY_ID[id];
-      const dmg = S.damaged.includes(id);
-      div.className = "lot built" + (dmg ? " damaged" : "");
-      div.innerHTML = `<span class="icon">${it.icon}</span><span class="name">${it.name}</span>` +
-        (dmg ? `<span class="tag">受損</span>` : it.protect ? `<span class="tag">防災</span>` : "");
-    }else{
-      div.className = "lot empty";
-      div.textContent = "空地";
+addEventListener("mousemove", e=>{
+  if(locked) look(e.movementX, e.movementY);
+  else if(dragging){
+    look(e.clientX-lx, e.clientY-ly);
+    dragMoved += Math.abs(e.clientX-lx)+Math.abs(e.clientY-ly);
+    lx=e.clientX; ly=e.clientY;
+  }
+});
+cv.addEventListener("mousedown", e=>{
+  if(!started || paused) return;
+  if(!locked){
+    if(e.button===0){ dragging=true; dragMoved=0; lx=e.clientX; ly=e.clientY; }
+    return;
+  }
+  if(e.button===0) breakBlock();
+  if(e.button===2) placeBlock();
+});
+addEventListener("mouseup", e=>{
+  if(dragging && e.button===0){
+    dragging=false;
+    if(dragMoved < 6){
+      // 純點擊：優先鎖定滑鼠；若環境不支援鎖定，則當作拆除
+      tryLock();
+      setTimeout(()=>{ if(!locked && started && !paused) breakBlock(); }, 250);
     }
-    estate.appendChild(div);
   }
+});
+cv.addEventListener("contextmenu", e=>{
+  e.preventDefault();
+  if(started && !paused && !locked) placeBlock();
+});
 
-  // 型錄
-  const shop = $("shop");
-  shop.innerHTML = "";
-  let lastCat = "";
-  for(const it of CATALOG){
-    if(it.cat !== lastCat){
-      lastCat = it.cat;
-      const lab = document.createElement("div");
-      lab.className = "cat-label";
-      lab.textContent = "── " + it.cat + " ──";
-      shop.appendChild(lab);
+// ─── 觸控 ───────────────────────────────────────────
+let joyV = {x:0, y:0}, flyUp = 0;
+if(IS_TOUCH){
+  const joy = $("joy"), knob = joy.querySelector("i");
+  let jid = null, jx=0, jy=0;
+  joy.addEventListener("touchstart", e=>{
+    const t=e.changedTouches[0]; jid=t.identifier; jx=t.clientX; jy=t.clientY; e.preventDefault();
+  });
+  addEventListener("touchmove", e=>{
+    for(const t of e.changedTouches){
+      if(t.identifier===jid){
+        joyV.x = Math.max(-1,Math.min(1,(t.clientX-jx)/40));
+        joyV.y = Math.max(-1,Math.min(1,(t.clientY-jy)/40));
+        knob.style.transform = `translate(calc(-50% + ${joyV.x*28}px), calc(-50% + ${joyV.y*28}px))`;
+      }else if(t.identifier===lookId){
+        look((t.clientX-lx)*2.2, (t.clientY-ly)*2.2); lx=t.clientX; ly=t.clientY;
+      }
     }
-    const owned = S.built.includes(it.id);
-    const row = document.createElement("div");
-    row.className = "item" + (owned ? " owned" : "");
-    row.innerHTML =
-      `<span class="icon">${it.icon}</span>` +
-      `<div class="info"><div class="n">${it.name}　<span class="price">${owned ? "已建造" : W(it.cost)}</span></div>` +
-      `<div class="d">豪華 +${it.lux}｜${it.desc}</div></div>`;
-    const btn = document.createElement("button");
-    btn.textContent = owned ? "✓" : "建造";
-    btn.disabled = owned || S.over || S.budget < it.cost;
-    btn.addEventListener("click", ()=>buy(it.id));
-    row.appendChild(btn);
-    shop.appendChild(row);
-  }
-
-  // 日誌
-  const log = $("log");
-  log.innerHTML = "";
-  if(!S.log.length){
-    log.innerHTML = `<div class="entry"><span class="m">開工</span>　歡迎！先建造幾項設施，別忘了防災工程──天有不測風雲。</div>`;
-  }
-  for(const e of S.log.slice(0,40)){
-    const div = document.createElement("div");
-    div.className = "entry " + e.cls;
-    div.innerHTML = `<span class="m">第${e.m}月</span>　${e.text}`;
-    log.appendChild(div);
-  }
-  save();
+  }, {passive:true});
+  addEventListener("touchend", e=>{
+    for(const t of e.changedTouches){
+      if(t.identifier===jid){ jid=null; joyV={x:0,y:0}; knob.style.transform="translate(-50%,-50%)"; }
+      if(t.identifier===lookId) lookId=null;
+    }
+  });
+  let lookId = null;
+  cv.addEventListener("touchstart", e=>{
+    const t=e.changedTouches[0];
+    if(lookId===null){ lookId=t.identifier; lx=t.clientX; ly=t.clientY; }
+  }, {passive:true});
+  const hold = (id,fn)=>{ let iv; const el=$(id);
+    el.addEventListener("touchstart",e=>{e.preventDefault();fn();iv=setInterval(fn,220);});
+    el.addEventListener("touchend",()=>clearInterval(iv)); };
+  hold("t-place", ()=>placeBlock());
+  hold("t-break", ()=>breakBlock());
+  $("t-up").addEventListener("touchstart",e=>{e.preventDefault();flyUp=1});
+  $("t-up").addEventListener("touchend",()=>flyUp=0);
+  $("t-down").addEventListener("touchstart",e=>{e.preventDefault();flyUp=-1});
+  $("t-down").addEventListener("touchend",()=>flyUp=0);
 }
 
-function buy(id){
-  const it = BY_ID[id];
-  if(S.built.includes(id) || S.budget < it.cost || S.over) return;
-  S.budget -= it.cost;
-  S.lux += it.lux;
-  S.built.push(id);
-  addLog("gain", `建造「${it.name}」，花費 ${W(it.cost)}，豪華 +${it.lux}。`);
-  render();
+// ─── 準星射線 ───────────────────────────────────────
+const ray = new THREE.Raycaster();
+ray.far = 9;
+function castHit(){
+  ray.setFromCamera({x:0,y:0}, camera);
+  const list = [...blocks.values(), ground];
+  const hits = ray.intersectObjects(list, false);
+  return hits.length ? hits[0] : null;
 }
-
-// ─── 事件卡 ─────────────────────────────────────────
-function showCard({disaster, icon, title, flavor, effects, onClose}){
-  const root = $("modal-root");
-  const fx = effects.map(e =>
-    `<div class="effect ${e.good ? "good" : "bad"}">${e.text}</div>`).join("");
-  root.innerHTML =
-    `<div class="overlay"><div class="card ${disaster ? "disaster" : ""}">` +
-    `<div class="big">${icon}</div><h3>${title}</h3><p>${flavor}</p>${fx}` +
-    `<button id="card-ok">${disaster ? "面對現實" : "知道了"}</button></div></div>`;
-  const ok = $("card-ok");
-  ok.focus();
-  ok.addEventListener("click", ()=>{ root.innerHTML=""; onClose && onClose(); });
+function targetCell(){
+  const h = castHit();
+  if(!h) return null;
+  if(h.object === ground){
+    const x = Math.floor(h.point.x), z = Math.floor(h.point.z);
+    return {place:{x,y:0,z}, hit:null};
+  }
+  const d = h.object.userData;
+  const n = h.face.normal;
+  return {place:{x:d.x+n.x, y:d.y+n.y, z:d.z+n.z}, hit:h.object};
 }
+function inBounds(p){ return Math.abs(p.x)<=RANGE && Math.abs(p.z)<=RANGE && p.y>=0 && p.y<=MAX_Y; }
 
-// ─── 月份推進 ───────────────────────────────────────
-function nextMonth(){
+function placeBlock(){
   if(S.over) return;
+  const t = targetCell();
+  if(!t || !inBounds(t.place)) return;
+  const p = t.place, ty = TYPES[sel];
+  const dx = camera.position.x-(p.x+.5), dy = camera.position.y-(p.y+.5), dz = camera.position.z-(p.z+.5);
+  if(dx*dx+dy*dy+dz*dz < 1.6) return; // 不能把方塊放進自己身上
+  if(S.budget < ty.cost){ pushLog("event", `預算不足，「${ty.name}」每塊要 ${W(ty.cost)}。`); renderHUD(); return; }
+  if(addBlock(p.x,p.y,p.z,sel)){ S.budget -= ty.cost; renderHUD(); queueSave(); }
+}
+function breakBlock(){
+  if(S.over) return;
+  const t = targetCell();
+  if(!t || !t.hit) return;
+  const d = delBlock(key(t.hit.userData.x, t.hit.userData.y, t.hit.userData.z));
+  if(d){ S.budget += Math.floor(TYPES[d.t].cost/2); renderHUD(); queueSave(); } // 拆除退一半
+}
+
+// ─── HUD ────────────────────────────────────────────
+function renderHUD(){
+  $("s-budget").textContent = W(S.budget);
+  $("s-budget").className = "value" + (S.budget<0 ? " debt" : "");
+  $("s-lux").textContent = S.lux;
+  $("s-month").textContent = S.over ? "完工" : `第 ${S.month} 月`;
+  for(const p of PROTS) $("p-"+p.key).classList.toggle("on", S.prot[p.key]);
+}
+function renderHotbar(){
+  const bar = $("hotbar");
+  bar.innerHTML = "";
+  TYPES.forEach((t,i)=>{
+    const d = document.createElement("div");
+    d.className = "slot" + (i===sel ? " sel" : "");
+    d.innerHTML = `<div class="chip" style="background:#${t.color.toString(16).padStart(6,"0")}"></div>` +
+      `<div class="n">${t.name}</div><div class="p">${t.cost}萬 <span class="k">${i+1}</span></div>`;
+    d.addEventListener("click", ()=>{ sel=i; renderHotbar(); });
+    bar.appendChild(d);
+  });
+}
+const logs = [];
+function pushLog(cls, text){
+  logs.unshift({cls, text});
+  const feed = $("logfeed");
+  feed.innerHTML = "";
+  for(const l of logs.slice(0,5)){
+    const d = document.createElement("div");
+    d.className = "entry "+l.cls;
+    d.textContent = l.text;
+    feed.appendChild(d);
+  }
+}
+function showHint(t){ const h=$("hint"); h.textContent=t; h.hidden=!t; }
+
+// ─── 月份與事件 ─────────────────────────────────────
+function skipMonth(){ if(started && !paused && !S.over) advanceMonth(); }
+$("btn-skip").addEventListener("click", e=>{ e.currentTarget.blur(); skipMonth(); });
+function advanceMonth(){
+  monthT = 0;
   if(S.month >= MONTHS){ finish(); return; }
   S.month++;
-
-  const roll = Math.random();
-  if(roll < 0.28) fireDisaster();
-  else if(roll < 0.62) fireEvent();
-  else{
-    addLog("", "本月風平浪靜，工程順利推進。");
-    render();
-  }
+  const r = Math.random();
+  if(r < .30) fireDisaster();
+  else if(r < .62) fireEvent();
+  else pushLog("", `第 ${S.month} 月：風平浪靜，工程順利。`);
+  renderHUD(); queueSave();
 }
 
 function fireDisaster(){
   const d = DISASTERS[Math.floor(Math.random()*DISASTERS.length)];
-  const protectedNow = hasProtect(d.key);
-  const eff = protectedNow ? d.light : d.heavy;
-  const effects = [{text:`修繕費 −${W(eff.cash)}`, good:false}];
-  S.budget -= eff.cash;
-
-  if(!protectedNow){
-    if(eff.lux){
-      const loss = Math.min(eff.lux, S.lux);
-      S.lux -= loss;
-      if(loss) effects.push({text:`豪華度 −${loss}`, good:false});
-    }
-    // 易損設施受災
-    if(eff.hitTag){
-      const victims = S.built.filter(id => BY_ID[id][eff.hitTag] && !S.damaged.includes(id));
-      if(victims.length){
-        const v = victims[Math.floor(Math.random()*victims.length)];
-        S.damaged.push(v);
-        const extra = Math.floor(BY_ID[v].lux/2);
-        S.lux = Math.max(0, S.lux - extra);
-        effects.push({text:`「${BY_ID[v].name}」受損，豪華度再 −${extra}`, good:false});
-      }
+  const safe = S.prot[d.key];
+  const effects = [];
+  let removed = 0;
+  if(!safe){
+    const victims = [...blocks.entries()].filter(([k,m]) => d.pick(m.userData, TYPES[m.userData.t]));
+    const n = Math.min(d.cap, Math.floor(victims.length * d.frac));
+    for(let i=0;i<n;i++){
+      const j = Math.floor(Math.random()*victims.length);
+      const [k] = victims.splice(j,1)[0];
+      if(delBlock(k)) removed++;
     }
   }
-  effects.push({text:eff.note, good:protectedNow});
-  addLog("disaster", `${d.icon} ${d.name}！${eff.note}，損失 ${W(eff.cash)}。`);
-  render();
-  showCard({disaster:true, icon:d.icon, title:d.name, flavor:d.flavor, effects, onClose:checkBankrupt});
+  const cash = safe ? d.lightCash : d.cash;
+  S.budget -= cash;
+  effects.push({text:`修繕費 −${W(cash)}`, good:false});
+  if(removed) effects.push({text:`${removed} 個方塊被摧毀`, good:false});
+  effects.push({text:safe ? d.lightNote : d.heavyNote, good:safe});
+  if(d.key==="quake") shakeT = safe ? .6 : 1.6;
+  pushLog("disaster", `${d.icon} ${d.name}！${safe ? d.lightNote : d.heavyNote}，−${W(cash)}${removed?`，損毀 ${removed} 塊`:""}。`);
+  showCard({disaster:true, icon:d.icon, title:d.name, flavor:d.flavor, effects});
 }
-
 function fireEvent(){
-  let e = EVENTS[Math.floor(Math.random()*EVENTS.length)];
-  let flavor = e.flavor, cash = e.cash||0, lux = e.lux||0;
-  if(e.need && !S.built.includes(e.need)){ flavor = e.fallbackFlavor; cash = 0; lux = 0; }
-  S.budget += cash;
-  S.lux += lux;
+  const e = EVENTS[Math.floor(Math.random()*EVENTS.length)];
+  const cash = e.cash||0, lux = e.lux||0;
+  S.budget += cash; S.lux += lux;
   const effects = [];
   if(cash) effects.push({text:`${cash>0?"+":"−"}${W(Math.abs(cash))}`, good:cash>0});
   if(lux)  effects.push({text:`豪華度 +${lux}`, good:true});
-  if(!effects.length) effects.push({text:"沒有實質影響", good:true});
-  addLog(cash>=0 && lux>=0 ? "gain" : "event", `${e.icon} ${e.name}：${flavor}`);
-  render();
-  showCard({disaster:false, icon:e.icon, title:e.name, flavor, effects, onClose:checkBankrupt});
+  pushLog(cash>=0 ? "gain" : "event", `${e.icon} ${e.name}：${e.flavor}`);
+  showCard({disaster:false, icon:e.icon, title:e.name, flavor:e.flavor, effects});
 }
 
-function checkBankrupt(){
-  if(S.budget < -500 && !S.over){
-    S.over = true;
-    addLog("disaster", "資金缺口過大，銀行拒絕續貸，工程被迫中止……");
-    render();
-    showEnding("💸", "破產收場", "負債累累，豪宅夢碎。下次記得留點週轉金，並及早投資防災工程。");
-  }
+// ─── 卡片 ───────────────────────────────────────────
+function showCard({disaster, icon, title, flavor, effects}){
+  paused = true;
+  document.exitPointerLock && document.exitPointerLock();
+  const fx = effects.map(e=>`<div class="effect ${e.good?"good":"bad"}">${e.text}</div>`).join("");
+  $("modal-root").innerHTML =
+    `<div class="overlay"><div class="card ${disaster?"disaster":""}">` +
+    `<div class="big">${icon}</div><h3>${title}</h3><p>${flavor}</p>${fx}` +
+    `<button class="main" id="card-ok">${disaster?"面對現實":"知道了"}</button></div></div>`;
+  const ok = $("card-ok"); ok.focus();
+  ok.addEventListener("click", ()=>{
+    $("modal-root").innerHTML = "";
+    if(checkBankrupt()) return;
+    paused = false;
+    if(!IS_TOUCH) tryLock();
+  });
+}
+
+// ─── 防災商店 ───────────────────────────────────────
+$("btn-shop").addEventListener("click", e=>{ e.currentTarget.blur(); openShop(); });
+function openShop(){
+  if(!started || S.over) return;
+  paused = true;
+  document.exitPointerLock && document.exitPointerLock();
+  const rows = PROTS.map(p=>{
+    const owned = S.prot[p.key];
+    return `<div class="shoprow ${owned?"owned":""}"><span class="ic">${p.icon}</span>` +
+      `<div class="inf"><div class="n">${p.name}　<span style="color:var(--gold)">${owned?"已完工":W(p.cost)}</span></div>` +
+      `<div class="d">${p.desc}</div></div>` +
+      `<button data-k="${p.key}" ${owned||S.budget<p.cost?"disabled":""}>${owned?"✓":"施作"}</button></div>`;
+  }).join("");
+  $("modal-root").innerHTML =
+    `<div class="overlay"><div class="card"><div class="big">🛡️</div><h3>防災工程</h3>` +
+    `<p style="font-size:13px;color:var(--muted)">天有不測風雲——先花小錢，才不會災後花大錢。</p>` +
+    rows + `<button class="main" id="shop-close">回到工地</button></div></div>`;
+  $("modal-root").querySelectorAll("button[data-k]").forEach(b=>{
+    b.addEventListener("click", ()=>{
+      const p = PROTS.find(x=>x.key===b.dataset.k);
+      if(S.prot[p.key] || S.budget < p.cost) return;
+      S.budget -= p.cost; S.prot[p.key] = true;
+      pushLog("gain", `完成「${p.name}」，−${W(p.cost)}。`);
+      renderHUD(); queueSave(); openShop();
+    });
+  });
+  $("shop-close").addEventListener("click", ()=>{
+    $("modal-root").innerHTML = ""; paused = false;
+    if(!IS_TOUCH) tryLock();
+  });
 }
 
 // ─── 結局 ───────────────────────────────────────────
-function finish(){
-  S.over = true;
-  const score = S.lux + Math.max(0, Math.floor(S.budget/200));
-  let icon, rank, note;
-  if(S.lux <= 0){ icon="🏚️"; rank="一片空地"; note="十二個月過去，這裡還是雜草叢生。至少……錢還在？"; }
-  else if(score >= 120){ icon="👑"; rank="傳世豪邸"; note="建築雜誌爭相報導，這座宅邸將流傳百年。"; }
-  else if(score >= 85){ icon="🏰"; rank="頂級豪宅"; note="氣派非凡，賓客無不驚嘆。"; }
-  else if(score >= 50){ icon="🏡"; rank="精品美宅"; note="舒適有品味，是理想的家。"; }
-  else{ icon="🛖"; rank="樸實小屋"; note="雖然簡單，但遮風避雨綽綽有餘。"; }
-  addLog("gain", `工程驗收完成！評定為「${rank}」（總分 ${score}）。`);
-  render();
-  showEnding(icon, rank, note, score);
+function checkBankrupt(){
+  if(S.budget < -500 && !S.over){
+    endGame("💸", "破產收場", "負債累累，豪宅夢碎。記得留週轉金，並及早施作防災工程。");
+    return true;
+  }
+  return false;
 }
-
-function showEnding(icon, rank, note, score){
-  const root = $("modal-root");
+function finish(){
+  const score = S.lux + Math.max(0, Math.floor(S.budget/100));
+  let icon, rank, note;
+  if(blocks.size===0){ icon="🏚️"; rank="一片空地"; note="十二個月過去，這裡連一塊磚都沒有。"; }
+  else if(score>=600){ icon="👑"; rank="傳世豪邸"; note="建築雜誌爭相報導，這座宅邸將流傳百年。"; }
+  else if(score>=350){ icon="🏰"; rank="頂級豪宅"; note="氣派非凡，賓客無不驚嘆。"; }
+  else if(score>=150){ icon="🏡"; rank="精品美宅"; note="舒適有品味，是理想的家。"; }
+  else{ icon="🛖"; rank="樸實小屋"; note="雖然簡單，但遮風避雨綽綽有餘。"; }
+  endGame(icon, rank, note, score);
+}
+function endGame(icon, rank, note, score){
+  S.over = true; paused = true;
+  document.exitPointerLock && document.exitPointerLock();
+  renderHUD(); queueSave();
   const rows =
     `<tr><td>豪華度</td><td>${S.lux}</td></tr>` +
     `<tr><td>剩餘預算</td><td>${W(S.budget)}</td></tr>` +
-    `<tr><td>建造設施</td><td>${S.built.length} 項</td></tr>` +
-    (score != null ? `<tr><td>總分</td><td>${score}</td></tr>` : "");
-  root.innerHTML =
+    `<tr><td>使用方塊</td><td>${blocks.size} 塊</td></tr>` +
+    (score!=null ? `<tr><td>總分</td><td>${score}</td></tr>` : "");
+  $("modal-root").innerHTML =
     `<div class="overlay"><div class="card ending"><div class="big">${icon}</div>` +
-    `<h3 style="font-size:15px;letter-spacing:.3em;font-weight:600">最終評定</h3>` +
+    `<h3 style="font-size:14px;letter-spacing:.3em;font-weight:600">最終評定</h3>` +
     `<div class="rank">${rank}</div><p>${note}</p><table>${rows}</table>` +
-    `<button id="card-restart">再蓋一棟</button></div></div>`;
-  const btn = $("card-restart");
-  btn.focus();
-  btn.addEventListener("click", ()=>{ root.innerHTML=""; S = freshState(); render(); });
+    `<button class="main" id="restart">再蓋一棟</button></div></div>`;
+  $("restart").addEventListener("click", ()=>{
+    for(const k of [...blocks.keys()]){ const m=blocks.get(k); scene.remove(m); blocks.delete(k); }
+    S = freshS(); monthT = 0; starterPad();
+    try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
+    $("modal-root").innerHTML = ""; paused = false;
+    pushLog("gain", "新的一年開始，重新開工！");
+    renderHUD(); queueSave();
+    if(!IS_TOUCH) tryLock();
+  });
 }
 
-// ─── 存檔（跨版本熱更新）────────────────────────────
-function save(){ try{ window.claude?.hot?.snapshot?.(S); }catch(e){} }
-function start(data){
-  S = (data && data.built) ? data : freshState();
-  $("btn-next").addEventListener("click", nextMonth);
-  render();
+// ─── 存檔 ───────────────────────────────────────────
+const SAVE_KEY = "golden-manor-3d";
+function snapshot(){
+  return {...S, blocks:[...blocks.values()].map(m=>[m.userData.x,m.userData.y,m.userData.z,m.userData.t])};
 }
-const boot = () => (window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? null));
-boot();
+function queueSave(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(()=>{
+    const snap = snapshot();
+    try{ window.claude?.hot?.snapshot?.(snap); }catch(e){}
+    try{ localStorage.setItem(SAVE_KEY, JSON.stringify(snap)); }catch(e){}
+  }, 400);
+}
+function restore(data){
+  S = freshS();
+  for(const k of Object.keys(S)) if(k in data && k!=="prot") S[k]=data[k];
+  if(data.prot) S.prot = {...S.prot, ...data.prot};
+  const luxBefore = S.lux;
+  for(const [x,y,z,t] of data.blocks||[]) addBlock(x,y,z,t,true);
+  S.lux = luxBefore;
+}
+
+// ─── 開始畫面 ───────────────────────────────────────
+function showStart(){
+  const ctrl = IS_TOUCH ?
+    `<table><tr><td>左搖桿</td><td>移動</td></tr><tr><td>右側拖曳</td><td>轉視角</td></tr>` +
+    `<tr><td>放置／拆除</td><td>對準星處操作</td></tr><tr><td>上升／下降</td><td>飛行</td></tr></table>` :
+    `<table><tr><td>W A S D</td><td>移動</td></tr><tr><td>空白鍵 / Shift</td><td>上升 / 下降（飛行）</td></tr>` +
+    `<tr><td>滑鼠</td><td>視角（點畫面鎖定）</td></tr><tr><td>左鍵 / 右鍵</td><td>拆除 / 放置方塊</td></tr>` +
+    `<tr><td>1–9 或滾輪</td><td>選建材</td></tr><tr><td>B / N</td><td>防災工程 / 跳月</td></tr></table>`;
+  $("modal-root").innerHTML =
+    `<div class="overlay" id="start"><div class="card">` +
+    `<h1>金邸計畫</h1><div class="tag">第一人稱建造版・十二個月・一億預算</div>` +
+    `<p style="font-size:13px">像 Minecraft 一樣一塊一塊蓋出你的豪宅。每 ${MONTH_SECS} 秒過一個月，` +
+    `小心突發事件與天災——先做防災工程能保住你的心血。</p>` + ctrl +
+    `<button class="main" id="go">開始建造</button>` +
+    `<div class="foot">比較喜歡 2D 經營版？<a href="classic.html">點這裡</a></div></div></div>`;
+  $("go").addEventListener("click", ()=>{
+    $("modal-root").innerHTML = "";
+    started = true; paused = false;
+    if(!IS_TOUCH) tryLock();
+    pushLog("gain", "開工！先鋪地基，記得留錢做防災工程。");
+  });
+}
+
+// ─── 主迴圈 ─────────────────────────────────────────
+const clock = new THREE.Clock();
+function tick(){
+  requestAnimationFrame(tick);
+  const dt = Math.min(clock.getDelta(), .1);
+
+  if(started && !paused && !S.over){
+    // 移動（飛行）
+    const sp = 8*dt;
+    const f = new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
+    const r = new THREE.Vector3(f.z,0,-f.x);
+    let mx=0,mz=0,my=0;
+    if(keys.KeyW) mz+=1; if(keys.KeyS) mz-=1;
+    if(keys.KeyD) mx+=1; if(keys.KeyA) mx-=1;
+    if(keys.Space) my+=1; if(keys.ShiftLeft||keys.ShiftRight) my-=1;
+    mz -= joyV.y; mx += joyV.x; my += flyUp;
+    camera.position.addScaledVector(f, mz*sp).addScaledVector(r, mx*sp);
+    camera.position.y = Math.max(1.2, Math.min(MAX_Y+6, camera.position.y + my*sp));
+
+    // 月份計時
+    monthT += dt;
+    $("monthfill").style.width = Math.min(100, monthT/MONTH_SECS*100)+"%";
+    if(monthT >= MONTH_SECS) advanceMonth();
+
+    // 預覽鬼影
+    const t = targetCell();
+    if(t && inBounds(t.place) && !blocks.has(key(t.place.x,t.place.y,t.place.z))){
+      ghost.position.set(t.place.x+.5, t.place.y+.5, t.place.z+.5);
+      ghost.visible = true;
+    }else ghost.visible = false;
+  }else ghost.visible = false;
+
+  camera.rotation.order = "YXZ";
+  camera.rotation.y = yaw;
+  camera.rotation.x = pitch;
+  if(shakeT > 0){
+    shakeT -= dt;
+    camera.position.x += (Math.random()-.5)*.14;
+    camera.position.y += (Math.random()-.5)*.14;
+  }
+  renderer.render(scene, camera);
+}
+addEventListener("resize", ()=>{
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// ─── 啟動 ───────────────────────────────────────────
+function boot(data){
+  blocks = new Map();
+  if(!data){
+    try{ data = JSON.parse(localStorage.getItem(SAVE_KEY)); }catch(e){ data = null; }
+  }
+  if(data && data.blocks && !data.over){ restore(data); }
+  else{ S = freshS(); starterPad(); }
+  renderHUD(); renderHotbar(); showStart(); tick();
+}
+window.claude?.hot?.ready ? window.claude.hot.ready(boot) : boot(window.claude?.hot?.data ?? null);
 </script>
