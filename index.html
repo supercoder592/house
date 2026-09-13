@@ -527,7 +527,7 @@ const CAREER_CAP = 20000; // 建設公司起始資金（萬）
 // ─── 狀態 ───────────────────────────────────────────
 let S, blocks, paused = true, started = false, monthT = 0, shakeT = 0, saveTimer = null, canResume = false;
 function freshS(){ return {budget:10000, lux:0, month:1, over:false,
-  mode:"classic", county:null, projects:0, projStart:1, rentals:[],
+  mode:"career", county:null, projects:0, projStart:1, rentals:[],
   prot:{quake:false, typhoon:false, fire:false, flood:false}}; }
 
 // ─── Three.js 場景 ──────────────────────────────────
@@ -1370,7 +1370,6 @@ function skipMonth(){ if(started && !paused && !S.over && S.mode!=="free") advan
 $("btn-skip").addEventListener("click", e=>{ e.currentTarget.blur(); skipMonth(); });
 function advanceMonth(){
   monthT = 0;
-  if(S.mode==="classic" && S.month >= MONTHS){ finish(); return; }
   S.month++;
   // 建設公司：出租資產每月進帳
   if(S.mode==="career" && S.rentals && S.rentals.length){
@@ -1529,16 +1528,6 @@ function checkBankrupt(){
   }
   return false;
 }
-function finish(){
-  const score = S.lux + Math.max(0, Math.floor(S.budget/100));
-  let icon, rank, note;
-  if(blocks.size===0){ icon="🏚️"; rank="一片空地"; note="十二個月過去，這裡連一塊磚都沒有。"; }
-  else if(score>=600){ icon="👑"; rank="傳世豪邸"; note="建築雜誌爭相報導，這座宅邸將流傳百年。"; }
-  else if(score>=350){ icon="🏰"; rank="頂級豪宅"; note="氣派非凡，賓客無不驚嘆。"; }
-  else if(score>=150){ icon="🏡"; rank="精品美宅"; note="舒適有品味，是理想的家。"; }
-  else{ icon="🛖"; rank="樸實小屋"; note="雖然簡單，但遮風避雨綽綽有餘。"; }
-  endGame(icon, rank, note, score);
-}
 function endGame(icon, rank, note, score){
   S.over = true; paused = true;
   document.exitPointerLock && document.exitPointerLock();
@@ -1690,12 +1679,10 @@ function showStart(){
     `<div class="overlay" id="start"><div class="card">` +
     `<h1>金邸計畫</h1><div class="tag">${ITEM_COUNT} 種建材・切割工具・台灣 22 縣市</div>` +
     resume +
-    `<div class="shoprow" style="cursor:pointer" id="md-classic"><span class="ic">⏳</span>` +
-    `<div class="inf"><div class="n">經典挑戰</div><div class="d">一億預算、十二個月，在天災中蓋出傳世豪邸</div></div></div>` +
-    `<div class="shoprow" style="cursor:pointer" id="md-free"><span class="ic">🏖️</span>` +
-    `<div class="inf"><div class="n">自由建造</div><div class="d">不限時間、預算無限、沒有天災，盡情創作</div></div></div>` +
     `<div class="shoprow" style="cursor:pointer" id="md-career"><span class="ic">🏢</span>` +
     `<div class="inf"><div class="n">建設公司</div><div class="d">${W(CAREER_CAP)} 創業，在台灣 22 縣市競標土地——工期超過 ${MIN_BUILD_MONTHS} 個月後可出售或出租收租金；各地地價、天災、地形都不同</div></div></div>` +
+    `<div class="shoprow" style="cursor:pointer" id="md-free"><span class="ic">🏖️</span>` +
+    `<div class="inf"><div class="n">自由建造</div><div class="d">不限時間、預算無限、沒有天災，盡情創作</div></div></div>` +
     `<details style="margin-top:12px;font-size:12px;color:var(--muted)"><summary style="cursor:pointer">操作說明</summary>${ctrl}</details>` +
     `<div class="foot">比較喜歡 2D 經營版？<a href="classic.html">點這裡</a></div></div></div>`;
   if(resume) $("md-resume").addEventListener("click", ()=>{
@@ -1704,7 +1691,6 @@ function showStart(){
     if(S.mode === "career" && S.county == null){ openBidding(); }
     else{ paused = false; enterWorld(); }
   });
-  $("md-classic").addEventListener("click", ()=>startMode("classic"));
   $("md-free").addEventListener("click", ()=>startMode("free"));
   $("md-career").addEventListener("click", ()=>startMode("career"));
 }
@@ -1995,7 +1981,7 @@ function boot(data){
   if(!data){
     try{ data = JSON.parse(localStorage.getItem(SAVE_KEY)); }catch(e){ data = null; }
   }
-  if(data && data.mods && !data.over){
+  if(data && data.mods && !data.over && data.mode !== "classic"){
     restore(data);
     canResume = true;
     if(S.county != null) applyTerrain(S.county);
