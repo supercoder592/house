@@ -1,4 +1,5 @@
 <title>金邸計畫 3D</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;900&family=Noto+Sans+TC:wght@400;500;700&display=swap">
 <style>
   :root{
@@ -21,7 +22,8 @@
     padding-block:0;padding-inline:0;
   }
   #app{position:fixed;inset:0}
-  canvas{display:block}
+  canvas{display:block;touch-action:none;-webkit-touch-callout:none}
+  body{overscroll-behavior:none}
 
   /* ── HUD ── */
   .hud{position:fixed;z-index:5;pointer-events:none}
@@ -101,24 +103,45 @@
   @media (pointer:coarse){
     #touchui{display:block;pointer-events:none}
     #joy{
-      position:fixed;left:18px;bottom:120px;width:110px;height:110px;border-radius:50%;
+      position:fixed;left:14px;bottom:96px;width:104px;height:104px;border-radius:50%;
       border:2px solid rgba(239,233,220,.35);pointer-events:auto;z-index:6;
+      touch-action:none;
     }
     #joy i{
-      position:absolute;left:50%;top:50%;width:44px;height:44px;border-radius:50%;
+      position:absolute;left:50%;top:50%;width:42px;height:42px;border-radius:50%;
       background:rgba(201,163,92,.5);transform:translate(-50%,-50%);
     }
     .tbtn{
-      position:fixed;z-index:6;pointer-events:auto;
+      position:fixed;z-index:6;pointer-events:auto;touch-action:none;
       background:var(--panel);border:1px solid var(--gold-soft);color:var(--ivory);
       border-radius:10px;width:56px;height:48px;font-size:13px;font-family:inherit;
+      backdrop-filter:blur(4px);
     }
-    #t-place{right:16px;bottom:190px;border-color:var(--good)}
-    #t-break{right:16px;bottom:134px;border-color:var(--bad)}
-    #t-up{right:82px;bottom:190px}
-    #t-down{right:82px;bottom:134px}
-    #t-rot{right:148px;bottom:190px}
+    #t-place{right:12px;bottom:210px;border-color:var(--good)}
+    #t-break{right:12px;bottom:156px;border-color:var(--bad)}
+    #t-up{right:74px;bottom:210px}
+    #t-down{right:74px;bottom:156px}
+    #t-rot{right:136px;bottom:210px}
+
+    /* 手機版 HUD 緊湊排版 */
+    #stats{top:8px;left:8px;right:8px;gap:6px;flex-wrap:nowrap}
+    .stat{padding:4px 8px;min-width:0;flex:1}
+    .stat .label{font-size:9px;letter-spacing:.12em}
+    .stat .value{font-size:13px}
+    #protbar{top:56px;right:8px}
+    .prot{width:30px;height:30px;font-size:14px}
+    #btns{top:56px;right:auto;left:8px;bottom:auto;flex-direction:row;gap:6px}
+    .hbtn{padding:5px 10px;font-size:12px}
+    #logfeed{top:100px;left:8px;bottom:auto;max-width:62vw}
+    #logfeed .entry{font-size:11px;padding:2px 8px}
+    #hotbar{bottom:6px}
+    .slot{width:46px;padding:4px 2px 2px}
+    .slot .chip{width:17px;height:17px}
+    .slot .n{font-size:9px}
+    .slot .p{font-size:8px}
+    #hint{top:34%;font-size:12px}
   }
+  .card{touch-action:pan-y}
 
   /* ── 卡片與遮罩 ── */
   .overlay{
@@ -298,7 +321,7 @@ const camera = new THREE.PerspectiveCamera(72, innerWidth/innerHeight, .1, 400);
 camera.position.set(6, 4, 12);
 const renderer = new THREE.WebGLRenderer({antialias:true});
 renderer.setSize(innerWidth, innerHeight);
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(devicePixelRatio, IS_TOUCH ? 1.6 : 2));
 renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.12;
@@ -310,7 +333,7 @@ scene.add(new THREE.HemisphereLight(0x93a8c8, 0x40382a, .5));
 const sun = new THREE.DirectionalLight(0xf0cf96, 1.15);
 sun.position.set(38, 52, 22);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.mapSize.set(IS_TOUCH ? 1024 : 2048, IS_TOUCH ? 1024 : 2048);
 sun.shadow.camera.left = sun.shadow.camera.bottom = -42;
 sun.shadow.camera.right = sun.shadow.camera.top = 42;
 sun.shadow.camera.near = 10; sun.shadow.camera.far = 160;
@@ -1053,7 +1076,8 @@ function showStart(){
   $("go").addEventListener("click", ()=>{
     $("modal-root").innerHTML = "";
     started = true; paused = false;
-    if(!IS_TOUCH) tryLock();
+    if(IS_TOUCH){ try{ document.documentElement.requestFullscreen?.(); }catch(e){} }
+    else tryLock();
     pushLog("gain", "開工！先鋪地基，記得留錢做防災工程。");
   });
 }
@@ -1127,6 +1151,7 @@ addEventListener("resize", ()=>{
 // ─── 啟動 ───────────────────────────────────────────
 function boot(data){
   blocks = new Map();
+  if(IS_TOUCH){ $("btn-shop").textContent = "防災工程"; $("btn-skip").textContent = "跳到下個月"; }
   if(!data){
     try{ data = JSON.parse(localStorage.getItem(SAVE_KEY)); }catch(e){ data = null; }
   }
