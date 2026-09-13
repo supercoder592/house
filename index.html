@@ -1092,7 +1092,7 @@ function tick(){
     // 移動（飛行）
     const sp = 8*dt;
     const f = new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
-    const r = new THREE.Vector3(f.z,0,-f.x);
+    const r = new THREE.Vector3(-f.z,0,f.x); // 右向量 = forward × up
     let mx=0,mz=0,my=0;
     if(keys.KeyW) mz+=1; if(keys.KeyS) mz-=1;
     if(keys.KeyD) mx+=1; if(keys.KeyA) mx-=1;
