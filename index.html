@@ -527,7 +527,7 @@ const CAREER_CAP = 20000; // 建設公司起始資金（萬）
 // ─── 狀態 ───────────────────────────────────────────
 let S, blocks, paused = true, started = false, monthT = 0, shakeT = 0, saveTimer = null, canResume = false;
 function freshS(){ return {budget:10000, lux:0, month:1, over:false,
-  mode:"career", county:null, projects:0, projStart:1, rentals:[],
+  mode:"career", county:null, projects:0, projStart:1, rentals:[], plotW:0, plotD:0,
   prot:{quake:false, typhoon:false, fire:false, flood:false}}; }
 
 // ─── Three.js 場景 ──────────────────────────────────
@@ -1008,9 +1008,10 @@ function fireFlash(){
 
 // ─── 縣市地形（建設公司模式）───────────────────────
 let terrainGroup = null;
-function applyTerrain(ci){
+function applyTerrain(ci, pw, pd){
   if(terrainGroup){ scene.remove(terrainGroup); terrainGroup = null; }
   terrainGroup = new THREE.Group();
+  if(pw && pd) buildNeighborhood(pw, pd);
   const c = ci != null ? COUNTIES[ci] : null;
   if(c){
     const t = c.terrain;
@@ -1045,6 +1046,84 @@ function applyTerrain(ci){
     }
   }
   scene.add(terrainGroup);
+}
+// 得標基地＋周邊街區：整地、金色地界、馬路、鄰居住宅、行道樹
+function buildNeighborhood(pw, pd){
+  // 整地（裸土基地）
+  const dirtTex = makeTex((g,s)=>PAINT.garden(g,s,{c:"#7a6a50"}), 128);
+  dirtTex.repeat.set(Math.max(1, pw/4), Math.max(1, pd/4));
+  const dirt = new THREE.Mesh(new THREE.PlaneGeometry(pw, pd),
+    new THREE.MeshStandardMaterial({map:dirtTex, roughness:1}));
+  dirt.rotation.x = -Math.PI/2;
+  dirt.position.y = .02;
+  dirt.receiveShadow = true;
+  terrainGroup.add(dirt);
+  // 金色地界
+  const fm = solid("#c9a35c", {rough:.5});
+  for(const [w2,d2,x2,z2] of [[pw+.3,.16,0,pd/2],[pw+.3,.16,0,-pd/2],[.16,pd+.3,pw/2,0],[.16,pd+.3,-pw/2,0]]){
+    const f = new THREE.Mesh(boxGeo(w2,.12,d2), fm);
+    f.position.set(x2,.06,z2);
+    terrainGroup.add(f);
+  }
+  // 馬路：前方（+z）與側面（+x）各一條
+  const roadMat = new THREE.MeshStandardMaterial({color:0x33363c, roughness:.95});
+  const laneMat = solid("#d8d4c0", {rough:.8});
+  const fz = pd/2 + 5.5, fx = pw/2 + 5.5;
+  const road1 = new THREE.Mesh(new THREE.PlaneGeometry(170, 7), roadMat);
+  road1.rotation.x = -Math.PI/2; road1.position.set(0, .028, fz); road1.receiveShadow = true;
+  terrainGroup.add(road1);
+  const road2 = new THREE.Mesh(new THREE.PlaneGeometry(7, 170), roadMat);
+  road2.rotation.x = -Math.PI/2; road2.position.set(fx, .026, 0); road2.receiveShadow = true;
+  terrainGroup.add(road2);
+  for(let i=-11;i<=11;i++){ // 分道線
+    const l1 = new THREE.Mesh(boxGeo(3,.012,.25), laneMat);
+    l1.position.set(i*7, .04, fz);
+    terrainGroup.add(l1);
+    if(Math.abs(i*7) > 4){
+      const l2 = new THREE.Mesh(boxGeo(.25,.012,3), laneMat);
+      l2.position.set(fx, .04, i*7);
+      terrainGroup.add(l2);
+    }
+  }
+  // 鄰居住宅
+  const bodyCols = ["#cfc8b8","#b0a290","#9aa6b0","#c0a8a0","#a8b89a","#d8c8a8"];
+  const roofCols = ["#7a4438","#5a5e66","#4a5244","#6a5044"];
+  function addHouse(hx2, hz2){
+    const bw2 = Math.round(R(5,8)*2)/2, bh2 = Math.round(R(3,4.5)*2)/2, bd2 = Math.round(R(5,7)*2)/2;
+    const body = new THREE.Mesh(boxGeo(bw2,bh2,bd2),
+      solid(bodyCols[Math.floor(Math.random()*bodyCols.length)]));
+    body.position.set(hx2, bh2/2, hz2);
+    body.castShadow = body.receiveShadow = true;
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(Math.max(bw2,bd2)*.72, R(1.6,2.4), 4),
+      solid(roofCols[Math.floor(Math.random()*roofCols.length)]));
+    roof.position.set(hx2, bh2 + .9, hz2);
+    roof.rotation.y = Math.PI/4;
+    roof.castShadow = true;
+    terrainGroup.add(body); terrainGroup.add(roof);
+  }
+  for(let i=0;i<7;i++){ // 前排街屋
+    const hx2 = -45 + i*15 + R(-2,2);
+    if(Math.abs(hx2 - fx) < 8) continue; // 避開側馬路
+    addHouse(hx2, fz + 11 + R(0,3));
+  }
+  for(let i=0;i<5;i++){ // 側排街屋
+    const hz2 = -38 + i*16 + R(-2,2);
+    if(Math.abs(hz2 - fz) < 8) continue;
+    addHouse(fx + 11 + R(0,3), hz2);
+  }
+  // 行道樹
+  for(let i=0;i<10;i++){
+    const ang = R(0,6.28), dist = R(Math.max(pw,pd)/2 + 5, 42);
+    const tx = Math.cos(ang)*dist, tz = Math.sin(ang)*dist;
+    if(tz > pd/2+1 && tz < fz+9) continue;   // 別長在馬路上
+    if(tx > pw/2+1 && tx < fx+9) continue;
+    const trunk = new THREE.Mesh(boxGeo(.4,2,.4), solid("#5a4028"));
+    trunk.position.set(tx, 1, tz);
+    const fol = new THREE.Mesh(new THREE.SphereGeometry(R(1.4,2.4), 8, 6), solid("#3f5c35"));
+    fol.position.set(tx, R(2.7,3.5), tz);
+    fol.castShadow = true;
+    terrainGroup.add(trunk); terrainGroup.add(fol);
+  }
 }
 
 // ─── 構件資料 ───────────────────────────────────────
@@ -1258,7 +1337,9 @@ function targetPlace(){
 }
 function validPlace(p){
   const T = ITEMS[sel], {hx,hz} = dimsOf(sel, rot);
-  if(Math.abs(p.cx)+hx > RANGE || Math.abs(p.cz)+hz > RANGE) return false;
+  let bx = RANGE, bz = RANGE; // 建設公司：只能蓋在得標的地界內
+  if(S.mode==="career" && S.county!=null && S.plotW){ bx = S.plotW/2; bz = S.plotD/2; }
+  if(Math.abs(p.cx)+hx > bx || Math.abs(p.cz)+hz > bz) return false;
   if(p.y < 0 || p.y + T.h > MAX_Y) return false;
   const g = {minX:p.cx-hx, maxX:p.cx+hx, minY:p.y+.02, maxY:p.y+T.h-.02, minZ:p.cz-hz, maxZ:p.cz+hz};
   for(const m of blocks.values())
@@ -1723,16 +1804,22 @@ function startMode(m){
 
 // ─── 建設公司：土地競標與出售 ───────────────────────
 let plots = null, bidState = null;
+const PLOT_SIZES = [[12,12],[16,12],[16,16],[20,16],[24,20]];
 function genPlots(){
   const idx = COUNTIES.map((c,i)=>i).sort(()=>Math.random()-.5).slice(0,3);
-  return idx.map(i=>({ci:i, base: Math.round(COUNTIES[i].price*800*R(.85,1.2)/10)*10}));
+  return idx.map(i=>{
+    const [pw,pd] = PLOT_SIZES[Math.floor(Math.random()*PLOT_SIZES.length)];
+    return {ci:i, pw, pd,
+      base: Math.round(COUNTIES[i].price*800*(pw*pd/256)*R(.85,1.2)/10)*10};
+  });
 }
 function plotRow(p, j){
   const c = COUNTIES[p.ci];
   const afford = S.budget >= p.base;
+  const ping = Math.round(p.pw*p.pd/3.306);
   return `<div class="shoprow" style="cursor:${afford?"pointer":"default"};opacity:${afford?1:.45}" data-j="${j}">` +
     `<span class="ic">${{plain:"🌾",hill:"⛰️",mount:"🏔️",coast:"🌊"}[c.terrain]}</span>` +
-    `<div class="inf"><div class="n">${c.name}　<span style="color:var(--gold)">底價 ${W(p.base)}</span></div>` +
+    `<div class="inf"><div class="n">${c.name}　${p.pw}×${p.pd}m（約${ping}坪）　<span style="color:var(--gold)">底價 ${W(p.base)}</span></div>` +
     `<div class="d">${TERRAIN_NAME[c.terrain]}｜地價 ${c.price}/10｜震 ${riskLabel(c.quake)}・颱 ${riskLabel(c.typhoon)}・洪 ${riskLabel(c.flood)}｜${c.info}</div></div></div>`;
 }
 function openBidding(){
@@ -1831,12 +1918,13 @@ function winBid(){
   const b = bidState, c = COUNTIES[b.p.ci];
   S.budget -= b.price;
   S.county = b.p.ci;
+  S.plotW = b.p.pw; S.plotD = b.p.pd;
   S.projStart = S.month;
   S.prot = {quake:false, typhoon:false, fire:false, flood:false};
   clearWorld(); S.lux = 0;
-  applyTerrain(S.county);
+  applyTerrain(S.county, S.plotW, S.plotD);
   bidState = null; plots = null;
-  pushLog("gain", `以 ${W(b.price)} 得標${c.name}土地（${TERRAIN_NAME[c.terrain]}）！開始蓋屋吧。`);
+  pushLog("gain", `以 ${W(b.price)} 得標${c.name} ${b.p.pw}×${b.p.pd}m 土地！只能在金色地界內興建。`);
   $("modal-root").innerHTML = "";
   paused = false;
   renderHUD(); queueSave();
@@ -1984,7 +2072,7 @@ function boot(data){
   if(data && data.mods && !data.over && data.mode !== "classic"){
     restore(data);
     canResume = true;
-    if(S.county != null) applyTerrain(S.county);
+    if(S.county != null) applyTerrain(S.county, S.plotW, S.plotD);
   }else{
     S = freshS();
   }
