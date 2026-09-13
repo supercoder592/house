@@ -1009,9 +1009,18 @@ function fireFlash(){
 // ─── 縣市地形（建設公司模式）───────────────────────
 let terrainGroup = null;
 function applyTerrain(ci, pw, pd){
-  if(terrainGroup){ scene.remove(terrainGroup); terrainGroup = null; }
+  if(terrainGroup){
+    terrainGroup.traverse(o=>{ // 釋放街區立面等一次性材質
+      if(o.material && o.material.userData && o.material.userData.temp){
+        if(o.material.map) o.material.map.dispose();
+        o.material.dispose();
+      }
+    });
+    scene.remove(terrainGroup);
+    terrainGroup = null;
+  }
   terrainGroup = new THREE.Group();
-  if(pw && pd) buildNeighborhood(pw, pd);
+  if(pw && pd) buildNeighborhood(pw, pd, ci);
   const c = ci != null ? COUNTIES[ci] : null;
   if(c){
     const t = c.terrain;
@@ -1047,8 +1056,31 @@ function applyTerrain(ci, pw, pd){
   }
   scene.add(terrainGroup);
 }
+// 都市街屋立面（每層兩扇窗的貼圖，依樓層數重複）
+const FAC_BASE = {};
+const TOWN_COLS = ["#cfc8bc","#b8b0a2","#a8a8a8","#c8bca8","#9aa2ac","#b0a89c","#8f8f96","#c4b8b0"];
+function facadeMat(color, cols, floors){
+  if(!FAC_BASE[color]){
+    FAC_BASE[color] = makeTex((g,s)=>{
+      g.fillStyle = color; g.fillRect(0,0,s,s);
+      speckle(g,s,90,["rgba(0,0,0,.18)","rgba(255,255,255,.18)"],.25);
+      for(const wx of [s*.13, s*.57]){
+        g.fillStyle = "#222c38"; g.fillRect(wx, s*.28, s*.3, s*.5);
+        g.fillStyle = "rgba(160,190,215,.45)"; g.fillRect(wx+2, s*.3, s*.3-4, s*.2);
+      }
+      g.fillStyle = "rgba(0,0,0,.28)"; g.fillRect(0, s-5, s, 5);
+    }, 128);
+  }
+  const t = FAC_BASE[color].clone();
+  t.needsUpdate = true;
+  t.repeat.set(cols, floors);
+  const m = new THREE.MeshStandardMaterial({map:t, roughness:.85});
+  m.userData.temp = true;
+  return m;
+}
+
 // 得標基地＋周邊街區：整地、金色地界、馬路、鄰居住宅、行道樹
-function buildNeighborhood(pw, pd){
+function buildNeighborhood(pw, pd, ci){
   // 整地（裸土基地）
   const dirtTex = makeTex((g,s)=>PAINT.garden(g,s,{c:"#7a6a50"}), 128);
   dirtTex.repeat.set(Math.max(1, pw/4), Math.max(1, pd/4));
@@ -1085,7 +1117,9 @@ function buildNeighborhood(pw, pd){
       terrainGroup.add(l2);
     }
   }
-  // 鄰居住宅
+  // 鄰居住宅：依地價分三級——都市連棟街屋緊湊相連、郊區半緊湊、鄉村獨棟
+  const cty = ci != null ? COUNTIES[ci] : COUNTIES[0];
+  const level = cty.price >= 7 ? 2 : cty.price >= 4 ? 1 : 0;
   const bodyCols = ["#cfc8b8","#b0a290","#9aa6b0","#c0a8a0","#a8b89a","#d8c8a8"];
   const roofCols = ["#7a4438","#5a5e66","#4a5244","#6a5044"];
   function addHouse(hx2, hz2){
@@ -1101,18 +1135,56 @@ function buildNeighborhood(pw, pd){
     roof.castShadow = true;
     terrainGroup.add(body); terrainGroup.add(roof);
   }
-  for(let i=0;i<7;i++){ // 前排街屋
-    const hx2 = -45 + i*15 + R(-2,2);
-    if(Math.abs(hx2 - fx) < 8) continue; // 避開側馬路
-    addHouse(hx2, fz + 11 + R(0,3));
+  function addTown(x2, z2, w2, floors, rotY){
+    const h2 = floors*3;
+    const fac = facadeMat(TOWN_COLS[Math.floor(Math.random()*TOWN_COLS.length)],
+      Math.max(1, Math.round(w2/4)), floors);
+    const roofM = solid("#3c4046", {rough:.95});
+    const body = new THREE.Mesh(boxGeo(w2, h2, 10), [fac, fac, roofM, roofM, fac, fac]);
+    body.position.set(x2, h2/2, z2);
+    body.rotation.y = rotY || 0;
+    body.castShadow = body.receiveShadow = true;
+    terrainGroup.add(body);
+    if(Math.random() < .45){ // 屋頂水塔
+      const wt = new THREE.Mesh(new THREE.CylinderGeometry(.7,.7,1.2,8),
+        solid("#b8bcc2", {metal:.6, rough:.4}));
+      wt.position.set(x2 + R(-w2/4,w2/4)*(rotY?0:1), h2 + .6, z2 + (rotY ? R(-w2/4,w2/4) : R(-1,1)));
+      wt.castShadow = true;
+      terrainGroup.add(wt);
+    }
   }
-  for(let i=0;i<5;i++){ // 側排街屋
-    const hz2 = -38 + i*16 + R(-2,2);
-    if(Math.abs(hz2 - fz) < 8) continue;
-    addHouse(fx + 11 + R(0,3), hz2);
+  if(level === 0){ // 鄉村：獨棟平房
+    for(let i=0;i<7;i++){
+      const hx2 = -45 + i*15 + R(-2,2);
+      if(Math.abs(hx2 - fx) < 8) continue;
+      addHouse(hx2, fz + 11 + R(0,3));
+    }
+    for(let i=0;i<5;i++){
+      const hz2 = -38 + i*16 + R(-2,2);
+      if(Math.abs(hz2 - fz) < 8) continue;
+      addHouse(fx + 11 + R(0,3), hz2);
+    }
+  }else{ // 郊區／都市：沿街連棟街屋
+    const gap = level === 2 ? 0 : 2.5;
+    const floorsOf = () => level === 2 ? 3 + Math.floor(Math.random()*3) : 2 + Math.floor(Math.random()*2);
+    let x2 = -52;
+    while(x2 < 52){ // 前排
+      const w2 = Math.round(R(6,9)*2)/2, cx2 = x2 + w2/2;
+      if(Math.abs(cx2 - fx) < 6.5){ x2 += w2; continue; }
+      addTown(cx2, fz + 9, w2, floorsOf());
+      x2 += w2 + gap;
+    }
+    let z2 = -46;
+    while(z2 < 46){ // 側排
+      const w2 = Math.round(R(6,9)*2)/2, cz2 = z2 + w2/2;
+      if(Math.abs(cz2 - fz) < 6.5){ z2 += w2; continue; }
+      addTown(fx + 9, cz2, w2, floorsOf(), Math.PI/2);
+      z2 += w2 + gap;
+    }
   }
-  // 行道樹
-  for(let i=0;i<10;i++){
+  // 行道樹（都市少、鄉村多）
+  const nTree = level === 2 ? 4 : level === 1 ? 7 : 10;
+  for(let i=0;i<nTree;i++){
     const ang = R(0,6.28), dist = R(Math.max(pw,pd)/2 + 5, 42);
     const tx = Math.cos(ang)*dist, tz = Math.sin(ang)*dist;
     if(tz > pd/2+1 && tz < fz+9) continue;   // 別長在馬路上
