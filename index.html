@@ -85,7 +85,7 @@
   }
   .slot.sel{border-color:var(--gold)}
   .slot .chip{width:22px;height:22px;border-radius:4px;margin:0 auto 2px;border:1px solid rgba(0,0,0,.35)}
-  .slot .n{font-size:10px;line-height:1.2;white-space:nowrap}
+  .slot .n{font-size:10px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .slot .p{font-size:9px;color:var(--gold);font-variant-numeric:tabular-nums}
   .slot .k{position:relative;top:-2px;font-size:8px;color:var(--muted)}
 
@@ -178,6 +178,29 @@
   .card button.alt:disabled{opacity:.6;cursor:wait}
   .card button:focus-visible{outline:2px solid var(--ivory);outline-offset:2px}
 
+  /* 建材目錄 */
+  .card.catalog{max-width:760px;text-align:left}
+  .card.catalog h3{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+  .catcount{font-size:12px;color:var(--muted);letter-spacing:.1em;font-weight:400}
+  .cattabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+  .cattab{
+    background:#20242e;border:1px solid var(--line);color:var(--ivory);border-radius:6px;
+    padding:4px 12px;font-family:inherit;font-size:13px;cursor:pointer;
+  }
+  .cattab.on{border-color:var(--gold);color:var(--gold)}
+  .catbody{max-height:52vh;overflow-y:auto;padding-right:4px}
+  .catfam{font-size:11px;letter-spacing:.2em;color:var(--muted);margin:10px 0 6px}
+  .catgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(102px,1fr));gap:6px}
+  .catitem{
+    background:#20242e;border:1px solid var(--line);border-radius:8px;
+    padding:8px 6px;text-align:center;cursor:pointer;
+  }
+  .catitem:hover{border-color:var(--gold-soft)}
+  .catitem.on{border-color:var(--gold)}
+  .catitem .chip{width:26px;height:26px;border-radius:5px;margin:0 auto 4px;border:1px solid rgba(0,0,0,.35)}
+  .catitem .cn{font-size:11px;line-height:1.3}
+  .catitem .cp{font-size:10px;color:var(--gold);font-variant-numeric:tabular-nums}
+
   /* 防災商店 */
   .shoprow{
     display:flex;align-items:center;gap:10px;text-align:left;
@@ -243,6 +266,7 @@
 <div class="hud" id="logfeed"></div>
 <div class="hud" id="hotbar"></div>
 <div class="hud" id="btns">
+  <button class="hbtn" id="btn-cat">建材目錄 (E)</button>
   <button class="hbtn" id="btn-shop">防災工程 (B)</button>
   <button class="hbtn" id="btn-skip">跳到下個月 (N)</button>
 </div>
@@ -268,19 +292,125 @@ const W = v => v.toLocaleString("zh-TW") + "萬";
 const $ = id => document.getElementById(id);
 const IS_TOUCH = matchMedia("(pointer:coarse)").matches;
 
-// ─── 建築構件型錄（cost 單位：萬；尺寸單位：公尺）──────
-const TYPES = [
-  {id:"wallC", name:"混凝土牆", w:4, h:3,   d:.25, cost:40,  lux:2,  color:0x989da2, tex:"concrete",  rep:[2,1.5]},
-  {id:"wallM", name:"大理石牆", w:4, h:3,   d:.25, cost:120, lux:8,  color:0xece6da, tex:"marble",    rep:[2,1.5]},
-  {id:"wallW", name:"木質牆",   w:4, h:3,   d:.25, cost:60,  lux:3,  color:0x8a5a33, tex:"wood",      rep:[2,1.5], flammable:true},
-  {id:"glass", name:"玻璃帷幕", w:4, h:3,   d:.15, cost:90,  lux:6,  color:0x9fd8ef, tex:"glass",     rep:[2,1.5], transparent:true, fragile:true},
-  {id:"door",  name:"大門牆",   w:4, h:3,   d:.25, cost:80,  lux:4,  color:0xb08968, tex:"door",      rep:[1,1],   flammable:true},
-  {id:"slab",  name:"樓板",     w:4, h:.3,  d:4,   cost:60,  lux:2,  color:0xb9b3a6, top:"stonefloor", side:"concrete", repTop:[2,2]},
-  {id:"roof",  name:"屋頂板",   w:4, h:.35, d:4,   cost:70,  lux:3,  color:0x3a3f4a, top:"roof",       side:"concrete", repTop:[2,2], isRoof:true},
-  {id:"col",   name:"石柱",     w:.5,h:3,   d:.5,  cost:25,  lux:1,  color:0xece6da, tex:"marble",    rep:[.5,1.5]},
-  {id:"cont",  name:"貨櫃屋",   w:6, h:2.6, d:2.5, cost:150, lux:5,  color:0xc2572e, tex:"container", rep:[3,1.3], metalHull:true},
-  {id:"pool",  name:"泳池",     w:4, h:.6,  d:4,   cost:200, lux:10, color:0x3f8fd2, top:"water",      side:"marble",   repTop:[2,2], waterTop:true},
+// ─── 建材系統：形狀 × 材質家族（500+ 種）──────────────
+// 形狀：尺寸（公尺）、基礎價（萬）、基礎豪華、所屬分類
+const SHAPES = {
+  wall:   {suffix:"牆",     w:4,  h:3,   d:.25, cost:40,  lux:2, cat:"牆面"},
+  wallS:  {suffix:"短牆",   w:2,  h:3,   d:.25, cost:24,  lux:1, cat:"牆面"},
+  wallLow:{suffix:"矮牆",   w:4,  h:1,   d:.25, cost:16,  lux:1, cat:"牆面"},
+  cube:   {suffix:"方塊",   w:1,  h:1,   d:1,   cost:10,  lux:1, cat:"方塊"},
+  col:    {suffix:"柱",     w:.5, h:3,   d:.5,  cost:22,  lux:1, cat:"柱樑"},
+  beam:   {suffix:"橫樑",   w:4,  h:.4,  d:.4,  cost:20,  lux:1, cat:"柱樑"},
+  slab:   {suffix:"樓板",   w:4,  h:.3,  d:4,   cost:55,  lux:2, cat:"樓板"},
+  slabS:  {suffix:"小樓板", w:2,  h:.3,  d:2,   cost:30,  lux:1, cat:"樓板"},
+  roof:   {suffix:"屋頂板", w:4,  h:.35, d:4,   cost:65,  lux:3, cat:"屋頂", isRoof:true},
+  gwall:  {suffix:"帷幕",   w:4,  h:3,   d:.15, cost:90,  lux:6, cat:"玻璃", trans:true},
+  gwallS: {suffix:"短帷幕", w:2,  h:3,   d:.15, cost:50,  lux:3, cat:"玻璃", trans:true},
+  gLow:   {suffix:"欄杆",   w:4,  h:1,   d:.1,  cost:30,  lux:2, cat:"玻璃", trans:true},
+  door:   {suffix:"門牆",   w:4,  h:3,   d:.25, cost:75,  lux:4, cat:"門窗"},
+  win:    {suffix:"窗牆",   w:4,  h:3,   d:.25, cost:65,  lux:4, cat:"門窗"},
+  cont:   {suffix:"貨櫃屋", w:6,  h:2.6, d:2.5, cost:150, lux:5, cat:"貨櫃"},
+  contS:  {suffix:"短貨櫃", w:3,  h:2.6, d:2.5, cost:90,  lux:3, cat:"貨櫃"},
+  panel:  {suffix:"發光板", w:4,  h:3,   d:.12, cost:70,  lux:5, cat:"特殊", emissive:true},
+  pool:   {suffix:"泳池",   w:4,  h:.6,  d:4,   cost:200, lux:10, cat:"特殊", pool:true},
+};
+// 塗裝色相自動生成（18 色相 × 亮/深 = 36 色）
+const HUE_NAMES = ["緋紅","橘紅","橙","琥珀","金黃","黃綠","草綠","翠綠","碧綠","青","湖藍","天藍","寶藍","靛","紫","紫紅","桃紅","粉櫻"];
+const PAINT_MATS = [];
+HUE_NAMES.forEach((n,i)=>{
+  PAINT_MATS.push([`pt${i}a`, `亮${n}塗裝`, `hsl(${i*20},52%,64%)`]);
+  PAINT_MATS.push([`pt${i}b`, `深${n}塗裝`, `hsl(${i*20},38%,38%)`]);
+});
+// 材質家族：painter 名稱、價格/豪華倍率、可用形狀、色樣 [id, 名稱, 主色, 副色?]
+const FAMS = [
+  {painter:"concrete", label:"混凝土", mult:1, luxM:1,
+   shapes:["wall","wallS","wallLow","cube","col","beam","slab","slabS"],
+   mats:[["cc1","淺灰混凝土","#989da2"],["cc2","深灰混凝土","#6f747a"],["cc3","米白混凝土","#b6b1a4"],
+         ["cc4","暖沙混凝土","#a89b86"],["cc5","青灰混凝土","#8a949c"],["cc6","炭黑混凝土","#4a4e54"]]},
+  {painter:"marble", label:"大理石", mult:2.6, luxM:3,
+   shapes:["wall","wallS","wallLow","cube","col","slab","slabS"],
+   mats:[["mb1","白大理石","#ece6da","#6f6a60"],["mb2","黑金大理石","#2e2e34","#c9a35c"],
+         ["mb3","墨綠大理石","#2e4638","#9fb8a6"],["mb4","玫瑰大理石","#d8b8b2","#8f5f58"],
+         ["mb5","米黃大理石","#ded2b8","#9a8a68"],["mb6","灰雲大理石","#c6c6c8","#77777c"]]},
+  {painter:"granite", label:"花崗岩", mult:1.9, luxM:2,
+   shapes:["wall","wallS","wallLow","cube","col","slab","slabS"],
+   mats:[["gr1","芝麻花崗岩","#9b9891"],["gr2","紅花崗岩","#9c6b5e"],["gr3","黑花崗岩","#4c4c4e"],["gr4","青花崗岩","#7d8a84"]]},
+  {painter:"wood", label:"木作", mult:1.4, luxM:1.6, flags:{flammable:true},
+   shapes:["wall","wallS","wallLow","cube","col","beam","slab","slabS"],
+   mats:[["wd1","淺橡木","#b08a5c"],["wd2","深胡桃木","#5e3f26"],["wd3","柚木","#8a5a33"],["wd4","紅檜木","#a06a42"],
+         ["wd5","白洗木","#c9b9a4"],["wd6","黑檀木","#3a2c22"],["wd7","竹材","#c2a86a"],["wd8","松木","#c09a6a"]]},
+  {painter:"brick", label:"磚作", mult:1.1, luxM:1,
+   shapes:["wall","wallS","wallLow","cube"],
+   mats:[["bk1","紅磚","#a04a3c"],["bk2","橙磚","#b06a44"],["bk3","黃磚","#b89a5e"],
+         ["bk4","灰磚","#8a8a86"],["bk5","白磚","#cfc8bc"],["bk6","黑磚","#4c4a48"]]},
+  {painter:"stone", label:"石材", mult:1.5, luxM:1.5,
+   shapes:["wall","wallS","wallLow","cube","slab","slabS"],
+   mats:[["st1","板岩","#5f6468"],["st2","砂岩","#c2a982"],["st3","洞石","#cbbfa8"],["st4","玄武岩","#3c4044"]]},
+  {painter:"paint", label:"塗裝", mult:1.05, luxM:1,
+   shapes:["wall","wallS","wallLow","cube"], mats:PAINT_MATS},
+  {painter:"metal", label:"金屬", mult:2.2, luxM:2.5, flags:{metal:true},
+   shapes:["wall","wallS","wallLow","cube","col","beam","roof"],
+   mats:[["mt1","拉絲不鏽鋼","#b8bcc2"],["mt2","金箔","#d3ae42"],["mt3","紅銅","#a2643c"],
+         ["mt4","鈦黑","#3a3d44"],["mt5","香檳金","#c8b088"],["mt6","青銅綠","#5e7a6a"]]},
+  {painter:"tile", label:"瓦作", mult:1, luxM:1,
+   shapes:["roof"],
+   mats:[["tl1","黑瓦","#343945"],["tl2","赤陶瓦","#a05a3c"],["tl3","青瓦","#4a5e66"],["tl4","灰瓦","#6a6e74"],["tl5","琉璃金瓦","#b8923c"]]},
+  {painter:"glassm", label:"玻璃", mult:1, luxM:1, flags:{trans:true, fragile:true},
+   shapes:["gwall","gwallS","gLow","cube"],
+   mats:[["gl1","清透玻璃","#cfe6f0"],["gl2","海藍玻璃","#9fc8e8"],["gl3","湖綠玻璃","#a8d8c8"],
+         ["gl4","茶色玻璃","#c0a888"],["gl5","霧面玻璃","#d8dee2"],["gl6","紫灰玻璃","#b8aac8"]]},
+  {painter:"doorp", label:"大門", mult:1, luxM:1, flags:{flammable:true},
+   shapes:["door"],
+   mats:[["dr1","純白","#d6cfbf"],["dr2","米白","#c8bfa8"],["dr3","暖灰","#9a9ea4"],
+         ["dr4","炭黑","#4a4e54"],["dr5","象牙","#dcd6c8"],["dr6","磚紅","#a05a48"],
+         ["dr7","墨綠","#3c5244"],["dr8","藏藍","#3a4a62"],["dr9","奶油","#e0d8c0"],["dr10","墨黑","#3a3a3e"]]},
+  {painter:"winp", label:"窗牆", mult:1, luxM:1,
+   shapes:["win"],
+   mats:[["wn1","純白","#d6cfbf"],["wn2","米白","#c8bfa8"],["wn3","暖灰","#9a9ea4"],
+         ["wn4","炭黑","#4a4e54"],["wn5","磚紅","#a05a48"],["wn6","墨綠","#3c5244"],
+         ["wn7","藏藍","#3a4a62"],["wn8","奶油","#e0d8c0"],["wn9","可可","#7a5c48"],["wn10","墨黑","#3a3a3e"]]},
+  {painter:"container", label:"貨櫃", mult:1, luxM:1,
+   shapes:["cont","contS"],
+   mats:[["ct1","鏽紅","#c2572e"],["ct2","海運藍","#2e5a8a"],["ct3","軍綠","#5a6a4a"],
+         ["ct4","亮黃","#c8a838"],["ct5","純白","#c8c8c4"],["ct6","消光黑","#3c3c40"],
+         ["ct7","亮橘","#c07030"],["ct8","湖水綠","#3c8a7a"],["ct9","酒紅","#8a3c44"],["ct10","天藍","#6aa0c8"]]},
+  {painter:"glow", label:"發光", mult:1, luxM:1, flags:{emissive:true},
+   shapes:["panel","cube","wallLow"],
+   mats:[["lw1","暖白光","#ffe9c0"],["lw2","鎏金光","#e8c878"],["lw3","冰藍光","#bcdcf8"],
+         ["lw4","翠綠光","#b8e8c8"],["lw5","桃紅光","#f0b8c8"],["lw6","紫羅蘭光","#d0b8f0"]]},
+  {painter:"garden", label:"庭園", mult:.8, luxM:1.2,
+   shapes:["slab","slabS"],
+   mats:[["gd1","草皮","#4a7a3c"],["gd2","礫石","#9a948a"],["gd3","白沙","#d8cfae"],["gd4","卵石","#5c5852"]]},
+  {painter:"waterp", label:"泳池", mult:1, luxM:1,
+   shapes:["pool"],
+   mats:[["pl1","碧藍泳池","#3f8fd2"],["pl2","湖水綠泳池","#3fae9e"],["pl3","深海泳池","#2c5e9a"],
+         ["pl4","溫泉池","#7ec8c0"],["pl5","黑檀池","#3a5058"],["pl6","香檳金池","#b0a070"],
+         ["pl7","晨霧池","#8ab0c8"],["pl8","紫湖池","#7a7ab8"]]},
 ];
+// 攤平成 ITEMS：id = 形狀.材質
+const ITEMS = {};
+const CATS = ["牆面","玻璃","門窗","樓板","屋頂","柱樑","方塊","貨櫃","特殊"];
+for(const F of FAMS){
+  for(const sh of F.shapes){
+    const S2 = SHAPES[sh];
+    for(const m of F.mats){
+      const id = sh + "." + m[0];
+      ITEMS[id] = {
+        id, shape:sh, painter:F.painter, fam:F.label,
+        name: m[1] + S2.suffix,
+        chip: m[2], c: m[2], v: m[3] || null,
+        w:S2.w, h:S2.h, d:S2.d, cat:S2.cat,
+        cost: Math.max(5, Math.round(S2.cost * F.mult)),
+        lux:  Math.max(1, Math.round(S2.lux  * F.luxM)),
+        isRoof: !!S2.isRoof, pool: !!S2.pool, emissive: !!(S2.emissive || F.flags?.emissive),
+        trans: !!(S2.trans || F.flags?.trans), fragile: !!F.flags?.fragile,
+        flammable: !!F.flags?.flammable, metal: !!F.flags?.metal,
+      };
+      if(S2.pool) ITEMS[id].name = m[1]; // 泳池不加後綴
+    }
+  }
+}
+const ITEM_COUNT = Object.keys(ITEMS).length;
 const PROTS = [
   {key:"quake",   icon:"🏗️", name:"制震結構", cost:800, desc:"大幅降低地震損失"},
   {key:"typhoon", icon:"🪟", name:"防颱工法", cost:300, desc:"大幅降低颱風損失"},
@@ -372,67 +502,120 @@ function edge(g,s){
   g.strokeStyle="rgba(255,255,255,.07)"; g.lineWidth=1;
   g.beginPath(); g.moveTo(2,2); g.lineTo(s-2,2); g.stroke();
 }
-const P = {
-  concrete(g,s){
-    g.fillStyle="#989da2"; g.fillRect(0,0,s,s);
-    speckle(g,s,420,["#7d8287","#aab0b5","#6e7276","#c0c5c9"],.5);
+const PAINT = {
+  concrete(g,s,p){
+    g.fillStyle=p.c; g.fillRect(0,0,s,s);
+    speckle(g,s,380,["rgba(0,0,0,.5)","rgba(255,255,255,.45)"],.5);
     for(let i=0;i<3;i++){
-      g.strokeStyle="rgba(55,58,62,.28)"; g.lineWidth=.8;
+      g.strokeStyle="rgba(0,0,0,.22)"; g.lineWidth=.8;
       g.beginPath(); let x=R(0,s), y=R(0,s); g.moveTo(x,y);
       for(let j=0;j<4;j++){ x+=R(-14,14); y+=R(-14,14); g.lineTo(x,y); } g.stroke();
     }
     edge(g,s);
   },
-  marble(g,s){
-    g.fillStyle="#ece6da"; g.fillRect(0,0,s,s);
+  marble(g,s,p){
+    g.fillStyle=p.c; g.fillRect(0,0,s,s);
     for(let i=0;i<6;i++){
-      g.fillStyle=`rgba(205,195,175,${R(.06,.14)})`;
+      g.fillStyle=`rgba(255,255,255,${R(.04,.1)})`;
       g.beginPath(); g.ellipse(R(0,s),R(0,s),R(15,42),R(10,28),R(0,6.3),0,6.3); g.fill();
     }
     for(let i=0;i<7;i++){
-      g.strokeStyle=`rgba(112,108,98,${R(.14,.3)})`; g.lineWidth=R(.5,1.6);
+      g.strokeStyle=p.v||"rgba(0,0,0,.3)"; g.globalAlpha=R(.25,.5); g.lineWidth=R(.5,1.6);
       g.beginPath(); let x=R(0,s), y=0; g.moveTo(x,y);
       while(y<s){ y+=R(6,16); x+=R(-9,9); g.lineTo(x,y); } g.stroke();
     }
+    g.globalAlpha=1; edge(g,s);
+  },
+  granite(g,s,p){
+    g.fillStyle=p.c; g.fillRect(0,0,s,s);
+    speckle(g,s,1200,["rgba(0,0,0,.6)","rgba(255,255,255,.55)","rgba(0,0,0,.3)"],.55);
     edge(g,s);
   },
-  wood(g,s){
-    g.fillStyle="#6e4522"; g.fillRect(0,0,s,s);
+  wood(g,s,p){
+    g.fillStyle=p.c; g.fillRect(0,0,s,s);
     const pw=s/2;
-    for(let p=0;p<2;p++){
-      g.fillStyle=`rgb(${128+R(-14,12)|0},${82+R(-10,10)|0},${42+R(-8,8)|0})`;
-      g.fillRect(p*pw+1,0,pw-2,s);
+    for(let q=0;q<2;q++){
+      g.fillStyle=`rgba(${Math.random()<.5?"255,255,255":"0,0,0"},${R(.03,.08)})`;
+      g.fillRect(q*pw+1,0,pw-2,s);
       for(let i=0;i<9;i++){
-        g.strokeStyle=`rgba(56,32,12,${R(.1,.24)})`; g.lineWidth=1;
-        g.beginPath(); let x=p*pw+R(3,pw-3), y=0; g.moveTo(x,0);
-        while(y<s){ y+=R(8,20); x=Math.max(p*pw+2,Math.min(p*pw+pw-2,x+R(-1.6,1.6))); g.lineTo(x,y); }
+        g.strokeStyle=`rgba(0,0,0,${R(.1,.24)})`; g.lineWidth=1;
+        g.beginPath(); let x=q*pw+R(3,pw-3), y=0; g.moveTo(x,0);
+        while(y<s){ y+=R(8,20); x=Math.max(q*pw+2,Math.min(q*pw+pw-2,x+R(-1.6,1.6))); g.lineTo(x,y); }
         g.stroke();
       }
-      if(Math.random()<.7){ // 木節
-        const kx=p*pw+R(6,pw-6), ky=R(10,s-10);
-        g.fillStyle="rgba(60,35,14,.55)"; g.beginPath(); g.ellipse(kx,ky,R(2,3.5),R(3,5),0,0,6.3); g.fill();
+      if(Math.random()<.6){
+        g.fillStyle="rgba(0,0,0,.4)";
+        g.beginPath(); g.ellipse(q*pw+R(6,pw-6),R(10,s-10),R(2,3.5),R(3,5),0,0,6.3); g.fill();
       }
-      g.fillStyle="rgba(38,20,7,.6)"; g.fillRect(p*pw,0,1.5,s); g.fillRect(p*pw+pw-1.5,0,1.5,s);
+      g.fillStyle="rgba(0,0,0,.5)"; g.fillRect(q*pw,0,1.5,s); g.fillRect(q*pw+pw-1.5,0,1.5,s);
     }
     edge(g,s);
   },
-  brick(g,s){
+  brick(g,s,p){
     g.fillStyle="#b3aa9c"; g.fillRect(0,0,s,s);
     const bh=s/4, bw=s/2;
-    for(let r=0;r<4;r++){
-      const off = r%2 ? -bw/2 : 0;
-      for(let c=0;c<3;c++){
-        const x=c*bw+off;
-        g.fillStyle=`rgb(${158+R(-26,16)|0},${70+R(-14,12)|0},${56+R(-12,10)|0})`;
-        g.fillRect(x+2, r*bh+2, bw-4, bh-4);
-        g.fillStyle="rgba(255,255,255,.06)"; g.fillRect(x+2, r*bh+2, bw-4, 2);
+    for(let r2=0;r2<4;r2++){
+      const off = r2%2 ? -bw/2 : 0;
+      for(let c2=0;c2<3;c2++){
+        const x=c2*bw+off;
+        g.fillStyle=p.c; g.fillRect(x+2, r2*bh+2, bw-4, bh-4);
+        g.fillStyle=`rgba(${Math.random()<.5?"0,0,0":"255,255,255"},${R(.03,.1)})`;
+        g.fillRect(x+2, r2*bh+2, bw-4, bh-4);
+        g.fillStyle="rgba(255,255,255,.07)"; g.fillRect(x+2, r2*bh+2, bw-4, 2);
       }
     }
-    speckle(g,s,160,["#3c2a22","#d9b8a8"],.3);
     edge(g,s);
   },
-  glass(g,s){
-    g.fillStyle="#cfe6f0"; g.fillRect(0,0,s,s);
+  stone(g,s,p){
+    g.fillStyle=p.c; g.fillRect(0,0,s,s);
+    g.fillStyle="rgba(0,0,0,.3)"; g.fillRect(0,0,s,s);
+    const ts2=s/2;
+    for(let r2=0;r2<2;r2++) for(let c2=0;c2<2;c2++){
+      g.fillStyle=p.c; g.fillRect(c2*ts2+2, r2*ts2+2, ts2-4, ts2-4);
+      g.fillStyle=`rgba(${Math.random()<.5?"0,0,0":"255,255,255"},${R(.02,.08)})`;
+      g.fillRect(c2*ts2+2, r2*ts2+2, ts2-4, ts2-4);
+    }
+    speckle(g,s,200,["rgba(0,0,0,.4)","rgba(255,255,255,.35)"],.4);
+    edge(g,s);
+  },
+  paint(g,s,p){
+    g.fillStyle=p.c; g.fillRect(0,0,s,s);
+    speckle(g,s,140,["rgba(255,255,255,.3)","rgba(0,0,0,.25)"],.15);
+    for(let i=0;i<5;i++){
+      g.fillStyle=`rgba(255,255,255,${R(.02,.05)})`;
+      g.fillRect(0, R(0,s), s, R(3,8));
+    }
+    edge(g,s);
+  },
+  metal(g,s,p){
+    g.fillStyle=p.c; g.fillRect(0,0,s,s);
+    const gr=g.createLinearGradient(0,0,0,s);
+    gr.addColorStop(0,"rgba(255,255,255,.22)"); gr.addColorStop(.5,"rgba(255,255,255,0)"); gr.addColorStop(1,"rgba(0,0,0,.22)");
+    g.fillStyle=gr; g.fillRect(0,0,s,s);
+    for(let i=0;i<46;i++){
+      g.strokeStyle = Math.random()<.5 ? `rgba(255,255,255,${R(.04,.13)})` : `rgba(0,0,0,${R(.04,.11)})`;
+      g.lineWidth=R(.5,1.4);
+      const y=R(0,s);
+      g.beginPath(); g.moveTo(0,y); g.lineTo(s,y+R(-2,2)); g.stroke();
+    }
+    edge(g,s);
+  },
+  tile(g,s,p){
+    g.fillStyle=p.c; g.fillRect(0,0,s,s);
+    const rh=s/4;
+    for(let r2=0;r2<4;r2++){
+      g.fillStyle="rgba(255,255,255,.08)"; g.fillRect(0,r2*rh,s,2);
+      g.fillStyle="rgba(0,0,0,.4)"; g.fillRect(0,(r2+1)*rh-3,s,3);
+      const off = r2%2 ? s/4 : 0;
+      for(let c2=-1;c2<3;c2++){
+        g.fillStyle="rgba(0,0,0,.26)"; g.fillRect(c2*s/2+off, r2*rh+2, 1.5, rh-4);
+      }
+    }
+    speckle(g,s,110,["rgba(255,255,255,.25)","rgba(0,0,0,.3)"],.4);
+    edge(g,s);
+  },
+  glassm(g,s,p){
+    g.fillStyle=p.c; g.fillRect(0,0,s,s);
     g.strokeStyle="rgba(255,255,255,.35)"; g.lineWidth=7;
     g.beginPath(); g.moveTo(-10,s*.8); g.lineTo(s*.8,-10); g.stroke();
     g.lineWidth=3;
@@ -440,55 +623,11 @@ const P = {
     g.strokeStyle="#5c6a76"; g.lineWidth=6; g.strokeRect(3,3,s-6,s-6);
     g.strokeStyle="rgba(255,255,255,.25)"; g.lineWidth=1; g.strokeRect(7,7,s-14,s-14);
   },
-  roof(g,s){
-    g.fillStyle="#343945"; g.fillRect(0,0,s,s);
-    const rh=s/4;
-    for(let r=0;r<4;r++){
-      g.fillStyle="rgba(255,255,255,.07)"; g.fillRect(0,r*rh,s,2);
-      g.fillStyle="rgba(0,0,0,.4)"; g.fillRect(0,(r+1)*rh-3,s,3);
-      const off = r%2 ? s/4 : 0;
-      for(let c=-1;c<3;c++){
-        g.fillStyle="rgba(0,0,0,.28)"; g.fillRect(c*s/2+off, r*rh+2, 1.5, rh-4);
-      }
-    }
-    speckle(g,s,120,["#4a5260","#242833"],.4);
-    edge(g,s);
-  },
-  gold(g,s){
-    const gr = g.createLinearGradient(0,0,0,s);
-    gr.addColorStop(0,"#e8c65a"); gr.addColorStop(.5,"#d3ae42"); gr.addColorStop(1,"#b8922f");
-    g.fillStyle=gr; g.fillRect(0,0,s,s);
-    for(let i=0;i<46;i++){
-      g.strokeStyle = Math.random()<.5 ? `rgba(255,240,190,${R(.05,.16)})` : `rgba(120,88,20,${R(.05,.13)})`;
-      g.lineWidth=R(.5,1.4);
-      const y=R(0,s);
-      g.beginPath(); g.moveTo(0,y); g.lineTo(s,y+R(-2,2)); g.stroke();
-    }
-    edge(g,s);
-  },
-  water(g,s){
-    const gr = g.createLinearGradient(0,0,0,s);
-    gr.addColorStop(0,"#4a9ade"); gr.addColorStop(1,"#3276b4");
-    g.fillStyle=gr; g.fillRect(0,0,s,s);
-    for(let i=0;i<10;i++){
-      g.strokeStyle=`rgba(205,238,255,${R(.12,.3)})`; g.lineWidth=R(.8,2);
-      g.beginPath();
-      let x=R(-10,s), y=R(0,s); g.moveTo(x,y);
-      for(let j=0;j<5;j++){ g.quadraticCurveTo(x+R(4,10), y+R(-5,5), x+=R(10,22), y+=R(-3,3)); }
-      g.stroke();
-    }
-  },
-  light(g,s){
-    const gr = g.createRadialGradient(s/2,s/2,4,s/2,s/2,s*.7);
-    gr.addColorStop(0,"#fff8e2"); gr.addColorStop(.55,"#f6dfa8"); gr.addColorStop(1,"#d8b070");
-    g.fillStyle=gr; g.fillRect(0,0,s,s);
-    g.strokeStyle="#8a7347"; g.lineWidth=3; g.strokeRect(2,2,s-4,s-4);
-  },
-  door(g,s){
-    g.fillStyle="#d6cfbf"; g.fillRect(0,0,s,s);
-    speckle(g,s,180,["#c2bbab","#e4ddcc"],.4);
+  doorp(g,s,p){
+    g.fillStyle=p.c; g.fillRect(0,0,s,s);
+    speckle(g,s,160,["rgba(0,0,0,.25)","rgba(255,255,255,.3)"],.3);
     const dw=s*.3, dx=(s-dw)/2, dy=s*.2;
-    g.fillStyle="#4e3319"; g.fillRect(dx-3, dy-3, dw+6, s-dy+3);
+    g.fillStyle="#3a2812"; g.fillRect(dx-3, dy-3, dw+6, s-dy+3);
     g.fillStyle="#6b4522"; g.fillRect(dx, dy, dw, s-dy);
     g.strokeStyle="rgba(30,17,6,.6)"; g.lineWidth=2;
     g.strokeRect(dx+4, dy+5, dw-8, (s-dy)*.42);
@@ -496,28 +635,54 @@ const P = {
     g.fillStyle="#d3ae42"; g.beginPath(); g.arc(dx+dw-6, dy+(s-dy)*.5, 2.4, 0, 6.3); g.fill();
     edge(g,s);
   },
-  container(g,s){
-    g.fillStyle="#c2572e"; g.fillRect(0,0,s,s);
-    for(let x=0;x<s;x+=8){
-      g.fillStyle="rgba(255,190,150,.16)"; g.fillRect(x,0,3,s);
-      g.fillStyle="rgba(60,20,5,.22)";     g.fillRect(x+5,0,3,s);
-    }
-    for(let i=0;i<7;i++){
-      g.fillStyle=`rgba(70,35,18,${R(.12,.3)})`;
-      g.beginPath(); g.ellipse(R(0,s),R(0,s),R(4,14),R(3,8),R(0,6.3),0,6.3); g.fill();
-    }
-    g.fillStyle="rgba(40,15,5,.5)"; g.fillRect(0,0,s,4); g.fillRect(0,s-4,s,4);
+  winp(g,s,p){
+    g.fillStyle=p.c; g.fillRect(0,0,s,s);
+    speckle(g,s,140,["rgba(0,0,0,.25)","rgba(255,255,255,.3)"],.3);
+    const wx=s*.18, wy=s*.18, ww=s*.64, wh=s*.5;
+    g.fillStyle="#3c444c"; g.fillRect(wx-3, wy-3, ww+6, wh+6);
+    g.fillStyle="#a8ccdd"; g.fillRect(wx, wy, ww, wh);
+    g.strokeStyle="rgba(255,255,255,.4)"; g.lineWidth=2;
+    g.beginPath(); g.moveTo(wx+4, wy+wh-6); g.lineTo(wx+ww*.4, wy+4); g.stroke();
+    g.fillStyle="#3c444c"; g.fillRect(wx+ww/2-1.5, wy, 3, wh); g.fillRect(wx, wy+wh/2-1.5, ww, 3);
+    g.fillStyle="rgba(255,255,255,.5)"; g.fillRect(wx-4, wy+wh+3, ww+8, 3);
     edge(g,s);
   },
-  stonefloor(g,s){
-    g.fillStyle="#a49d8e"; g.fillRect(0,0,s,s);
-    const ts2=s/2;
-    for(let r=0;r<2;r++) for(let c=0;c<2;c++){
-      g.fillStyle=`rgb(${182+R(-16,10)|0},${175+R(-14,10)|0},${160+R(-14,10)|0})`;
-      g.fillRect(c*ts2+2, r*ts2+2, ts2-4, ts2-4);
+  container(g,s,p){
+    g.fillStyle=p.c; g.fillRect(0,0,s,s);
+    for(let x=0;x<s;x+=8){
+      g.fillStyle="rgba(255,255,255,.14)"; g.fillRect(x,0,3,s);
+      g.fillStyle="rgba(0,0,0,.2)";        g.fillRect(x+5,0,3,s);
     }
-    speckle(g,s,220,["#8f887a","#c8c1b2"],.4);
+    for(let i=0;i<7;i++){
+      g.fillStyle=`rgba(0,0,0,${R(.1,.25)})`;
+      g.beginPath(); g.ellipse(R(0,s),R(0,s),R(4,14),R(3,8),R(0,6.3),0,6.3); g.fill();
+    }
+    g.fillStyle="rgba(0,0,0,.45)"; g.fillRect(0,0,s,4); g.fillRect(0,s-4,s,4);
     edge(g,s);
+  },
+  glow(g,s,p){
+    const gr=g.createRadialGradient(s/2,s/2,4,s/2,s/2,s*.7);
+    gr.addColorStop(0,"#ffffff"); gr.addColorStop(.45,p.c); gr.addColorStop(1,p.c);
+    g.fillStyle=gr; g.fillRect(0,0,s,s);
+    g.strokeStyle="rgba(0,0,0,.35)"; g.lineWidth=3; g.strokeRect(2,2,s-4,s-4);
+  },
+  garden(g,s,p){
+    g.fillStyle=p.c; g.fillRect(0,0,s,s);
+    speckle(g,s,750,["rgba(0,0,0,.4)","rgba(255,255,255,.3)","rgba(0,0,0,.2)"],.55);
+    edge(g,s);
+  },
+  waterp(g,s,p){
+    g.fillStyle=p.c; g.fillRect(0,0,s,s);
+    const gr=g.createLinearGradient(0,0,0,s);
+    gr.addColorStop(0,"rgba(255,255,255,.12)"); gr.addColorStop(1,"rgba(0,0,0,.18)");
+    g.fillStyle=gr; g.fillRect(0,0,s,s);
+    for(let i=0;i<10;i++){
+      g.strokeStyle=`rgba(255,255,255,${R(.15,.35)})`; g.lineWidth=R(.8,2);
+      g.beginPath();
+      let x=R(-10,s), y=R(0,s); g.moveTo(x,y);
+      for(let j=0;j<5;j++){ g.quadraticCurveTo(x+R(4,10), y+R(-5,5), x+=R(10,22), y+=R(-3,3)); }
+      g.stroke();
+    }
   },
   grass(g,s){
     g.fillStyle="#31402c"; g.fillRect(0,0,s,s);
@@ -585,7 +750,7 @@ for(let i=0;i<9;i++){
 // ─── 地面 ───────────────────────────────────────────
 const ground = new THREE.Mesh(
   new THREE.PlaneGeometry(300, 300),
-  new THREE.MeshStandardMaterial({map:makeTex(P.grass,128,44), roughness:1}));
+  new THREE.MeshStandardMaterial({map:makeTex(PAINT.grass,128,44), roughness:1}));
 ground.rotation.x = -Math.PI/2;
 ground.receiveShadow = true;
 scene.add(ground);
@@ -595,39 +760,41 @@ grid.material.transparent = true;
 grid.material.opacity = .22;
 scene.add(grid);
 
-// ─── 構件材質與幾何 ─────────────────────────────────
-let waterTex;
-function texFor(name, rep){
-  const t = makeTex(P[name]);
-  t.repeat.set(rep[0], rep[1]);
-  return t;
+// ─── 構件材質與幾何（惰性生成＋快取，500+ 種不吃載入）──
+const waterTexes = [];
+const GEO_CACHE = {}, MAT_CACHE = {};
+function geoFor(I){
+  return GEO_CACHE[I.shape] || (GEO_CACHE[I.shape] = new THREE.BoxGeometry(I.w, I.h, I.d));
 }
-function stdMat(mapName, rep, o={}){
-  const map = texFor(mapName, rep);
-  const m = new THREE.MeshStandardMaterial({
-    map,
-    transparent: !!o.trans, opacity: o.trans ? .5 : 1, depthWrite: !o.trans,
-    roughness: o.rough ?? .85, metalness: o.metal ?? 0,
-    envMapIntensity: o.env ?? .35,
-  });
-  if(o.isWater) waterTex = map;
+function matFor(I){
+  if(MAT_CACHE[I.id]) return MAT_CACHE[I.id];
+  let m;
+  if(I.pool){ // 泳池：頂面水、側面大理石
+    const topTex = makeTex((g,s)=>PAINT.waterp(g,s,I), 128);
+    topTex.repeat.set(2,2);
+    waterTexes.push(topTex);
+    const top = new THREE.MeshStandardMaterial({map:topTex, roughness:.05, envMapIntensity:1});
+    const sideTex = makeTex((g,s)=>PAINT.marble(g,s,{c:"#ece6da", v:"#8a8478"}), 128);
+    sideTex.repeat.set(2,.3);
+    const side = new THREE.MeshStandardMaterial({map:sideTex, roughness:.4});
+    m = [side, side, top, side, side, side];
+  }else{
+    const map = makeTex((g,s)=>PAINT[I.painter](g,s,I), 128);
+    map.repeat.set(Math.max(1, I.w/2), Math.max(1, I.h/2));
+    m = new THREE.MeshStandardMaterial({
+      map,
+      transparent: I.trans, opacity: I.trans ? .5 : 1, depthWrite: !I.trans,
+      roughness: I.metal ? .35 : I.trans ? .06 : I.painter==="marble" ? .38 : .85,
+      metalness: I.metal ? .85 : I.painter==="container" ? .4 : 0,
+      envMapIntensity: I.metal ? 1.1 : I.trans ? 1 : .35,
+      emissive: I.emissive ? 0xffffff : 0x000000,
+      emissiveMap: I.emissive ? map : null,
+      emissiveIntensity: I.emissive ? .75 : 0,
+    });
+  }
+  MAT_CACHE[I.id] = m;
   return m;
 }
-const GEOS = TYPES.map(t => new THREE.BoxGeometry(t.w, t.h, t.d));
-const MATS = TYPES.map(t=>{
-  if(t.top){ // 上下不同面：樓板／屋頂／泳池
-    const side = stdMat(t.side, [2,.3]);
-    const top = t.waterTop
-      ? stdMat("water", t.repTop, {rough:.05, env:1, isWater:true})
-      : stdMat(t.top, t.repTop, {rough:t.isRoof ? .7 : .8});
-    return [side, side, top, side, side, side];
-  }
-  const o = {};
-  if(t.transparent){ o.trans = true; o.rough = .06; o.env = 1; }
-  if(t.metalHull){ o.metal = .45; o.rough = .5; o.env = .6; }
-  if(t.id === "wallM" || t.id === "col"){ o.rough = .38; }
-  return stdMat(t.tex, t.rep, o);
-});
 const ghost = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), new THREE.MeshBasicMaterial({
   color:0xc9a35c, transparent:true, opacity:.28, depthWrite:false}));
 ghost.visible = false;
@@ -658,11 +825,11 @@ function fireFlash(){
 // ─── 構件資料 ───────────────────────────────────────
 let midSeq = 1;
 function dimsOf(t, r){
-  const T = TYPES[t];
+  const T = ITEMS[t];
   return r%2 ? {hx:T.d/2, hz:T.w/2} : {hx:T.w/2, hz:T.d/2};
 }
 function aabbOf(u){
-  const {hx,hz} = dimsOf(u.t, u.rot), T = TYPES[u.t];
+  const {hx,hz} = dimsOf(u.t, u.rot), T = ITEMS[u.t];
   return {minX:u.cx-hx, maxX:u.cx+hx, minY:u.y, maxY:u.y+T.h, minZ:u.cz-hz, maxZ:u.cz+hz};
 }
 function overlapVol(a,b){
@@ -672,11 +839,12 @@ function overlapVol(a,b){
   return (x>0 && y>0 && z>0) ? x*y*z : 0;
 }
 function addMod(t, cx, y, cz, r, silent){
-  const T = TYPES[t];
-  const m = new THREE.Mesh(GEOS[t], MATS[t]);
+  const T = ITEMS[t];
+  if(!T) return null;
+  const m = new THREE.Mesh(geoFor(T), matFor(T));
   m.rotation.y = r*Math.PI/2;
   m.position.set(cx, y+T.h/2, cz);
-  m.castShadow = !T.transparent;
+  m.castShadow = !T.trans;
   m.receiveShadow = true;
   const mid = midSeq++;
   m.userData = {mid, t, cx, y, cz, rot:r};
@@ -690,17 +858,26 @@ function delMod(mid){
   if(!m) return null;
   scene.remove(m);
   blocks.delete(mid);
-  S.lux -= TYPES[m.userData.t].lux;
+  S.lux -= ITEMS[m.userData.t].lux;
   return m.userData;
 }
 function starterPad(){
-  const sl = TYPES.findIndex(t=>t.id==="slab");
+  const sl = "slab.mb1"; // 白大理石樓板
   for(const [x,z] of [[-2,-2],[2,-2],[-2,2],[2,2]]) addMod(sl, x, 0, z, 0, true);
-  S.lux += 4*TYPES[sl].lux; S.budget -= 4*TYPES[sl].cost;
+  S.lux += 4*ITEMS[sl].lux; S.budget -= 4*ITEMS[sl].cost;
 }
 
 // ─── 視角與移動 ─────────────────────────────────────
-let yaw = 0.46, pitch = -0.24, sel = 1, rot = 0;
+let yaw = 0.46, pitch = -0.24, rot = 0;
+let sel = "wall.mb1"; // 目前選用建材（id = 形狀.材質）
+let recents = ["wall.mb1","gwall.gl1","slab.mb1","roof.tl1","door.dr1","win.wn1",
+               "col.mb1","cont.ct1","pool.pl1","panel.lw1"];
+function selectItem(id){
+  if(!ITEMS[id]) return;
+  sel = id;
+  if(!recents.includes(id)){ recents.unshift(id); recents = recents.slice(0,10); }
+  renderHotbar();
+}
 const keys = {};
 addEventListener("keydown", e=>{
   if(e.code==="Space") e.preventDefault();
@@ -708,8 +885,9 @@ addEventListener("keydown", e=>{
   keys[e.code] = true;
   if(e.code.startsWith("Digit")){
     const n = (+e.code.slice(5) + 9) % 10; // 1→0 … 9→8，0→9
-    if(n < TYPES.length){ sel = n; renderHotbar(); }
+    if(recents[n]){ sel = recents[n]; renderHotbar(); }
   }
+  if(e.code==="KeyE") openCatalog();
   if(e.code==="KeyR") rot = (rot+1)%4;
   if(e.code==="KeyX" && started && !paused) breakBlock();
   if(e.code==="KeyB") openShop();
@@ -718,7 +896,8 @@ addEventListener("keydown", e=>{
 addEventListener("keyup", e=>keys[e.code]=false);
 addEventListener("wheel", e=>{
   if(!started || paused) return;
-  sel = (sel + (e.deltaY>0?1:-1) + TYPES.length) % TYPES.length;
+  const i = Math.max(0, recents.indexOf(sel));
+  sel = recents[(i + (e.deltaY>0?1:-1) + recents.length) % recents.length];
   renderHotbar();
 });
 
@@ -838,7 +1017,7 @@ function targetPlace(){
   return {hit:h.object, place:{cx,cz,y:Math.round(y*20)/20}};
 }
 function validPlace(p){
-  const T = TYPES[sel], {hx,hz} = dimsOf(sel, rot);
+  const T = ITEMS[sel], {hx,hz} = dimsOf(sel, rot);
   if(Math.abs(p.cx)+hx > RANGE || Math.abs(p.cz)+hz > RANGE) return false;
   if(p.y < 0 || p.y + T.h > MAX_Y) return false;
   const g = {minX:p.cx-hx, maxX:p.cx+hx, minY:p.y+.02, maxY:p.y+T.h-.02, minZ:p.cz-hz, maxZ:p.cz+hz};
@@ -852,7 +1031,7 @@ function placeBlock(){
   if(S.over) return;
   const t = targetPlace();
   if(!t || !t.place || !validPlace(t.place)) return;
-  const T = TYPES[sel];
+  const T = ITEMS[sel];
   if(S.budget < T.cost){ pushLog("event", `預算不足，「${T.name}」要 ${W(T.cost)}。`); renderHUD(); return; }
   addMod(sel, t.place.cx, t.place.y, t.place.cz, rot);
   S.budget -= T.cost; renderHUD(); queueSave();
@@ -862,7 +1041,7 @@ function breakBlock(){
   const t = targetPlace();
   if(!t || !t.hit) return;
   const d = delMod(t.hit.userData.mid);
-  if(d){ S.budget += Math.floor(TYPES[d.t].cost/2); renderHUD(); queueSave(); } // 拆除退一半
+  if(d){ S.budget += Math.floor(ITEMS[d.t].cost/2); renderHUD(); queueSave(); } // 拆除退一半
 }
 
 // ─── HUD ────────────────────────────────────────────
@@ -876,12 +1055,14 @@ function renderHUD(){
 function renderHotbar(){
   const bar = $("hotbar");
   bar.innerHTML = "";
-  TYPES.forEach((t,i)=>{
+  recents.forEach((id,i)=>{
+    const t = ITEMS[id];
+    if(!t) return;
     const d = document.createElement("div");
-    d.className = "slot" + (i===sel ? " sel" : "");
-    d.innerHTML = `<div class="chip" style="background:#${t.color.toString(16).padStart(6,"0")}"></div>` +
+    d.className = "slot" + (id===sel ? " sel" : "");
+    d.innerHTML = `<div class="chip" style="background:${t.chip}"></div>` +
       `<div class="n">${t.name}</div><div class="p">${t.cost}萬 <span class="k">${(i+1)%10}</span></div>`;
-    d.addEventListener("click", ()=>{ sel=i; renderHotbar(); });
+    d.addEventListener("click", ()=>{ sel=id; renderHotbar(); });
     bar.appendChild(d);
   });
 }
@@ -919,7 +1100,7 @@ function fireDisaster(){
   const effects = [];
   let removed = 0;
   if(!safe){
-    const victims = [...blocks.entries()].filter(([k,m]) => d.pick(m.userData, TYPES[m.userData.t]));
+    const victims = [...blocks.entries()].filter(([k,m]) => d.pick(m.userData, ITEMS[m.userData.t]));
     const n = Math.min(d.cap, Math.floor(victims.length * d.frac));
     for(let i=0;i<n;i++){
       const j = Math.floor(Math.random()*victims.length);
@@ -965,6 +1146,44 @@ function showCard({disaster, icon, title, flavor, effects}){
     paused = false;
     if(!IS_TOUCH) tryLock();
   });
+}
+
+// ─── 建材目錄 ───────────────────────────────────────
+let catTab = "牆面";
+$("btn-cat").addEventListener("click", e=>{ e.currentTarget.blur(); openCatalog(); });
+function openCatalog(){
+  if(!started || S.over) return;
+  paused = true;
+  document.exitPointerLock && document.exitPointerLock();
+  renderCatalog();
+}
+function closeCatalog(){
+  $("modal-root").innerHTML = ""; paused = false;
+  if(!IS_TOUCH) tryLock();
+}
+function renderCatalog(){
+  const tabs = CATS.map(c=>`<button class="cattab ${c===catTab?"on":""}" data-c="${c}">${c}</button>`).join("");
+  const groups = {};
+  for(const I of Object.values(ITEMS)) if(I.cat===catTab) (groups[I.fam] || (groups[I.fam]=[])).push(I);
+  let body = "";
+  for(const fam of Object.keys(groups)){
+    body += `<div class="catfam">── ${fam} ──</div><div class="catgrid">` +
+      groups[fam].map(I=>
+        `<div class="catitem ${I.id===sel?"on":""}" data-id="${I.id}">` +
+        `<div class="chip" style="background:${I.chip}"></div>` +
+        `<div class="cn">${I.name}</div><div class="cp">${I.cost}萬</div></div>`).join("") +
+      `</div>`;
+  }
+  $("modal-root").innerHTML =
+    `<div class="overlay"><div class="card catalog">` +
+    `<h3>建材目錄<span class="catcount">共 ${ITEM_COUNT} 種</span></h3>` +
+    `<div class="cattabs">${tabs}</div><div class="catbody">${body}</div>` +
+    `<button class="main" id="cat-close" style="display:block;margin-inline:auto">回到工地</button></div></div>`;
+  $("modal-root").querySelectorAll(".cattab").forEach(b=>
+    b.addEventListener("click", ()=>{ catTab = b.dataset.c; renderCatalog(); }));
+  $("modal-root").querySelectorAll(".catitem").forEach(el=>
+    el.addEventListener("click", ()=>{ selectItem(el.dataset.id); closeCatalog(); }));
+  $("cat-close").addEventListener("click", closeCatalog);
 }
 
 // ─── 防災商店 ───────────────────────────────────────
@@ -1057,7 +1276,7 @@ function exportGLB(){
       const c = new THREE.Mesh(m.geometry, m.material);
       c.position.copy(m.position);
       c.rotation.copy(m.rotation);
-      c.name = TYPES[m.userData.t].id + "_" + m.userData.mid;
+      c.name = m.userData.t.replace(".", "_") + "_" + m.userData.mid;
       group.add(c);
     }
     new THREE.GLTFExporter().parse(group, resolve, reject, {binary:true});
@@ -1118,9 +1337,9 @@ async function download3D(btn){
 }
 
 // ─── 存檔 ───────────────────────────────────────────
-const SAVE_KEY = "golden-manor-3d-v2";
+const SAVE_KEY = "golden-manor-3d-v3";
 function snapshot(){
-  return {...S, mods:[...blocks.values()].map(m=>{
+  return {...S, sel, recents, mods:[...blocks.values()].map(m=>{
     const u = m.userData; return [u.t, u.cx, u.y, u.cz, u.rot];
   })};
 }
@@ -1137,21 +1356,27 @@ function restore(data){
   for(const k of Object.keys(S)) if(k in data && k!=="prot") S[k]=data[k];
   if(data.prot) S.prot = {...S.prot, ...data.prot};
   for(const [t,cx,y,cz,r] of data.mods||[]) addMod(t, cx, y, cz, r||0, true);
+  if(Array.isArray(data.recents)){
+    const valid = data.recents.filter(id=>ITEMS[id]);
+    if(valid.length) recents = valid.slice(0,10);
+  }
+  if(ITEMS[data.sel]) sel = data.sel;
 }
 
 // ─── 開始畫面 ───────────────────────────────────────
 function showStart(){
   const ctrl = IS_TOUCH ?
     `<table><tr><td>左搖桿</td><td>移動</td></tr><tr><td>右側拖曳</td><td>轉視角</td></tr>` +
-    `<tr><td>放置／拆除</td><td>對準星處操作</td></tr><tr><td>旋轉</td><td>轉構件方向</td></tr><tr><td>上升／下降</td><td>飛行</td></tr></table>` :
+    `<tr><td>放置／拆除</td><td>對準星處操作</td></tr><tr><td>旋轉</td><td>轉構件方向</td></tr>` +
+    `<tr><td>建材目錄</td><td>瀏覽全部建材</td></tr><tr><td>上升／下降</td><td>飛行</td></tr></table>` :
     `<table><tr><td>W A S D</td><td>移動</td></tr><tr><td>空白鍵 / Shift</td><td>上升 / 下降（飛行）</td></tr>` +
     `<tr><td>滑鼠</td><td>視角（點畫面鎖定）</td></tr><tr><td>左鍵 / 右鍵</td><td>拆除 / 放置構件</td></tr>` +
-    `<tr><td>R</td><td>旋轉構件方向</td></tr>` +
-    `<tr><td>1–0 或滾輪</td><td>選構件</td></tr><tr><td>B / N</td><td>防災工程 / 跳月</td></tr></table>`;
+    `<tr><td>R</td><td>旋轉構件方向</td></tr><tr><td>E</td><td>開建材目錄</td></tr>` +
+    `<tr><td>1–0 或滾輪</td><td>快捷列選建材</td></tr><tr><td>B / N</td><td>防災工程 / 跳月</td></tr></table>`;
   $("modal-root").innerHTML =
     `<div class="overlay" id="start"><div class="card">` +
     `<h1>金邸計畫</h1><div class="tag">第一人稱建造版・十二個月・一億預算</div>` +
-    `<p style="font-size:13px">用一面面牆、樓板、玻璃帷幕——甚至整個貨櫃，組裝出你的豪宅。每 ${MONTH_SECS} 秒過一個月，` +
+    `<p style="font-size:13px">${ITEM_COUNT} 種建材任你組裝——大理石牆、玻璃帷幕、彩色貨櫃、發光板應有盡有。每 ${MONTH_SECS} 秒過一個月，` +
     `小心突發事件與天災——先做防災工程能保住你的心血。</p>` + ctrl +
     `<button class="main" id="go">開始建造</button>` +
     `<div class="foot">比較喜歡 2D 經營版？<a href="classic.html">點這裡</a></div></div></div>`;
@@ -1191,7 +1416,7 @@ function tick(){
     // 預覽鬼影（金色＝可放，紅色＝不可）
     const t = targetPlace();
     if(t && t.place){
-      const T = TYPES[sel], {hx,hz} = dimsOf(sel, rot);
+      const T = ITEMS[sel], {hx,hz} = dimsOf(sel, rot);
       ghost.scale.set(hx*2, T.h, hz*2);
       ghost.position.set(t.place.cx, t.place.y+T.h/2, t.place.cz);
       ghost.material.color.set(validPlace(t.place) ? 0xc9a35c : 0xd9564a);
@@ -1200,7 +1425,7 @@ function tick(){
   }else ghost.visible = false;
 
   // 環境動態：池水流動、雲飄、雨落
-  if(waterTex){ waterTex.offset.y += dt*.028; waterTex.offset.x += dt*.011; }
+  for(const wt of waterTexes){ wt.offset.y += dt*.028; wt.offset.x += dt*.011; }
   for(const c of clouds){ c.position.x += dt*.7; if(c.position.x > 150) c.position.x = -150; }
   if(weatherT > 0){
     weatherT -= dt;
@@ -1233,7 +1458,11 @@ addEventListener("resize", ()=>{
 // ─── 啟動 ───────────────────────────────────────────
 function boot(data){
   blocks = new Map();
-  if(IS_TOUCH){ $("btn-shop").textContent = "防災工程"; $("btn-skip").textContent = "跳到下個月"; }
+  if(IS_TOUCH){
+    $("btn-cat").textContent = "建材目錄";
+    $("btn-shop").textContent = "防災工程";
+    $("btn-skip").textContent = "跳到下個月";
+  }
   if(!data){
     try{ data = JSON.parse(localStorage.getItem(SAVE_KEY)); }catch(e){ data = null; }
   }
