@@ -122,6 +122,7 @@
     #t-up{right:74px;bottom:210px}
     #t-down{right:74px;bottom:156px}
     #t-rot{right:136px;bottom:210px}
+    #t-cut{right:136px;bottom:156px;border-color:var(--gold-soft);color:var(--gold)}
 
     /* 手機版 HUD 緊湊排版 */
     #stats{top:8px;left:8px;right:8px;gap:6px;flex-wrap:nowrap}
@@ -279,6 +280,7 @@
   <button class="tbtn" id="t-up">上升</button>
   <button class="tbtn" id="t-down">下降</button>
   <button class="tbtn" id="t-rot">旋轉</button>
+  <button class="tbtn" id="t-cut">切割</button>
 </div>
 
 <div id="flash"></div>
@@ -387,9 +389,43 @@ const FAMS = [
          ["pl4","溫泉池","#7ec8c0"],["pl5","黑檀池","#3a5058"],["pl6","香檳金池","#b0a070"],
          ["pl7","晨霧池","#8ab0c8"],["pl8","紫湖池","#7a7ab8"]]},
 ];
+// 內裝家具（組合式構件；每款有多色）
+const FURN = [
+  {kind:"bed",     name:"雙人床",   w:2,   h:1.05, d:1.9, cost:45, lux:4,
+   colors:[["bd1","海軍藍","#3a5a8a"],["bd2","酒紅","#8a4048"],["bd3","米白","#cfc6b4"],["bd4","墨綠","#3c5a4a"]]},
+  {kind:"sofa",    name:"沙發",     w:2.2, h:.85,  d:.95, cost:38, lux:4,
+   colors:[["sf1","奶油","#d8cdb8"],["sf2","深灰","#5a5e64"],["sf3","森綠","#4a6a54"],["sf4","酒紅","#7e3c44"],["sf5","駝色","#b09070"]]},
+  {kind:"table",   name:"餐桌",     w:1.6, h:.78,  d:.9,  cost:25, lux:2,
+   colors:[["tb1","橡木","#a87e50"],["tb2","胡桃","#6a4828"]]},
+  {kind:"chair",   name:"餐椅",     w:.5,  h:.95,  d:.5,  cost:8,  lux:1,
+   colors:[["ch1","橡木","#a87e50"],["ch2","胡桃","#6a4828"],["ch3","黑","#3a3a3c"]]},
+  {kind:"coffee",  name:"茶几",     w:.9,  h:.42,  d:.6,  cost:15, lux:1,
+   colors:[["cf1","橡木","#a87e50"],["cf2","黑石","#3c4044"]]},
+  {kind:"counter", name:"廚房中島", w:2,   h:1.1,  d:.7,  cost:60, lux:5,
+   colors:[["kc1","白櫃","#d8d4c8"],["kc2","墨綠櫃","#3c5a4a"],["kc3","胡桃櫃","#6a4828"]]},
+  {kind:"fridge",  name:"冰箱",     w:.75, h:1.85, d:.75, cost:30, lux:2,
+   colors:[["fr1","銀","#b8bcc2"],["fr2","消光黑","#3a3d42"]]},
+  {kind:"tv",      name:"電視櫃",   w:1.9, h:1.45, d:.45, cost:40, lux:3,
+   colors:[["tv1","胡桃","#6a4828"]]},
+  {kind:"tub",     name:"浴缸",     w:1.7, h:.6,   d:.85, cost:35, lux:3,
+   colors:[["bt1","純白","#e8e6e0"]]},
+  {kind:"toilet",  name:"馬桶",     w:.45, h:.75,  d:.65, cost:12, lux:1,
+   colors:[["wc1","純白","#e8e6e0"]]},
+  {kind:"shelf",   name:"書櫃",     w:1.2, h:2,    d:.35, cost:28, lux:3,
+   colors:[["bs1","橡木","#a87e50"],["bs2","黑","#3a3a3c"]]},
+  {kind:"wardrobe",name:"衣櫃",     w:1.2, h:2.1,  d:.6,  cost:32, lux:2,
+   colors:[["wr1","橡木","#a87e50"],["wr2","白","#d8d4c8"],["wr3","胡桃","#6a4828"]]},
+  {kind:"lamp",    name:"立燈",     w:.4,  h:1.65, d:.4,  cost:14, lux:2, glow:true,
+   colors:[["lp1","暖白","#ffe9c0"],["lp2","琥珀","#e8c070"]]},
+  {kind:"rug",     name:"地毯",     w:2.4, h:.05,  d:1.6, cost:12, lux:2,
+   colors:[["rg1","緋紅","#9a4a44"],["rg2","靛藍","#3c4a72"],["rg3","米駝","#c0ac8c"],
+           ["rg4","墨綠","#3c5a4a"],["rg5","炭灰","#4c4e54"],["rg6","鵝黃","#c8b070"]]},
+  {kind:"plant",   name:"盆栽",     w:.55, h:1.25, d:.55, cost:10, lux:2,
+   colors:[["pp1","龜背芋","#4a7a4a"],["pp2","琴葉榕","#5a8a54"]]},
+];
 // 攤平成 ITEMS：id = 形狀.材質
 const ITEMS = {};
-const CATS = ["牆面","玻璃","門窗","樓板","屋頂","柱樑","方塊","貨櫃","特殊"];
+const CATS = ["牆面","玻璃","門窗","樓板","屋頂","柱樑","方塊","貨櫃","內裝","特殊"];
 for(const F of FAMS){
   for(const sh of F.shapes){
     const S2 = SHAPES[sh];
@@ -408,6 +444,17 @@ for(const F of FAMS){
       };
       if(S2.pool) ITEMS[id].name = m[1]; // 泳池不加後綴
     }
+  }
+}
+for(const F of FURN){
+  for(const c of F.colors){
+    const id = "fn_" + F.kind + "." + c[0];
+    ITEMS[id] = {
+      id, furn:F.kind, fam:F.name, name:c[1]+F.name, chip:c[2], c:c[2],
+      w:F.w, h:F.h, d:F.d, cat:"內裝", cost:F.cost, lux:F.lux,
+      flammable: !(F.kind==="tub"||F.kind==="toilet"||F.kind==="fridge"),
+      emissive: !!F.glow,
+    };
   }
 }
 const ITEM_COUNT = Object.keys(ITEMS).length;
@@ -762,10 +809,114 @@ scene.add(grid);
 
 // ─── 構件材質與幾何（惰性生成＋快取，500+ 種不吃載入）──
 const waterTexes = [];
-const GEO_CACHE = {}, MAT_CACHE = {};
-function geoFor(I){
-  return GEO_CACHE[I.shape] || (GEO_CACHE[I.shape] = new THREE.BoxGeometry(I.w, I.h, I.d));
+const GEO_CACHE = {}, MAT_CACHE = {}, SOLID_CACHE = {};
+function boxGeo(w,h,d){
+  const k = w+","+h+","+d;
+  return GEO_CACHE[k] || (GEO_CACHE[k] = new THREE.BoxGeometry(w,h,d));
 }
+function solid(c, o={}){
+  const k = c + "|" + (o.rough??"") + (o.metal??"") + (o.em?1:0);
+  if(SOLID_CACHE[k]) return SOLID_CACHE[k];
+  return SOLID_CACHE[k] = new THREE.MeshStandardMaterial({
+    color:c, roughness:o.rough ?? .8, metalness:o.metal ?? 0,
+    emissive:o.em ? c : 0x000000, emissiveIntensity:o.em ? .85 : 0,
+    envMapIntensity:.35,
+  });
+}
+function part(gp, w,h,d, x,y,z, mat){
+  const b = new THREE.Mesh(boxGeo(w,h,d), mat);
+  b.position.set(x,y,z);
+  b.castShadow = b.receiveShadow = true;
+  gp.add(b);
+  return b;
+}
+// 家具組裝（原點在底部中心）
+const BUILDERS = {
+  bed(g,c){
+    const wd=solid("#6a4c2e"), mt=solid("#e8e2d4");
+    part(g,2,.3,1.9, 0,.15,0, wd);
+    part(g,1.9,.22,1.8, 0,.41,0, mt);
+    part(g,1.9,.1,1.0, 0,.55,.35, solid(c));
+    part(g,.55,.12,.35, -.45,.58,-.6, mt); part(g,.55,.12,.35, .45,.58,-.6, mt);
+    part(g,2,.75,.12, 0,.65,-.89, wd);
+  },
+  sofa(g,c){
+    const cl=solid(c);
+    part(g,2.2,.35,.95, 0,.25,0, cl);
+    part(g,1.6,.18,.6, 0,.5,.1, cl);
+    part(g,2.2,.5,.25, 0,.6,-.35, cl);
+    part(g,.3,.55,.95, -.95,.55,0, cl); part(g,.3,.55,.95, .95,.55,0, cl);
+  },
+  table(g,c){
+    const wd=solid(c);
+    part(g,1.6,.07,.9, 0,.74,0, wd);
+    for(const [x,z] of [[-.72,-.38],[.72,-.38],[-.72,.38],[.72,.38]]) part(g,.08,.72,.08, x,.36,z, wd);
+  },
+  chair(g,c){
+    const wd=solid(c);
+    part(g,.45,.07,.45, 0,.47,0, wd);
+    part(g,.45,.48,.07, 0,.72,-.2, wd);
+    for(const [x,z] of [[-.19,-.19],[.19,-.19],[-.19,.19],[.19,.19]]) part(g,.06,.45,.06, x,.22,z, wd);
+  },
+  coffee(g,c){
+    const m=solid(c);
+    part(g,.9,.07,.6, 0,.38,0, m);
+    for(const [x,z] of [[-.4,-.24],[.4,-.24],[-.4,.24],[.4,.24]]) part(g,.07,.36,.07, x,.18,z, m);
+  },
+  counter(g,c){
+    part(g,2,.82,.65, 0,.41,0, solid(c));
+    part(g,2.06,.07,.7, 0,.88,0, solid("#ece6da",{rough:.35}));
+    part(g,.06,.22,.06, .6,1.0,-.12, solid("#b8bcc2",{metal:.8,rough:.3}));
+  },
+  fridge(g,c){
+    part(g,.75,1.8,.72, 0,.9,0, solid(c,{metal:.5,rough:.4}));
+    part(g,.04,.9,.06, .3,1.1,.38, solid("#888c92",{metal:.7,rough:.3}));
+  },
+  tv(g,c){
+    part(g,1.9,.4,.45, 0,.2,0, solid(c));
+    part(g,1.7,.95,.07, 0,.95,0, solid("#101216",{rough:.15}));
+  },
+  tub(g,c){
+    part(g,1.7,.55,.85, 0,.28,0, solid(c,{rough:.25}));
+    part(g,1.45,.03,.6, 0,.52,0, solid("#9fc8e0",{rough:.1}));
+  },
+  toilet(g,c){
+    const wh=solid(c,{rough:.3});
+    part(g,.42,.38,.5, 0,.19,.06, wh);
+    part(g,.44,.06,.52, 0,.42,.06, wh);
+    part(g,.42,.35,.16, 0,.55,-.24, wh);
+  },
+  shelf(g,c){
+    const wd=solid(c);
+    part(g,1.2,2,.08, 0,1,-.13, wd);
+    part(g,.06,2,.35, -.57,1,0, wd); part(g,.06,2,.35, .57,1,0, wd);
+    for(let i=0;i<5;i++) part(g,1.1,.05,.33, 0,.12+i*.45,0, wd);
+    for(let i=0;i<4;i++)
+      part(g,1.05,.32,.2, 0,.32+i*.45,0, solid(["#8a4444","#44608a","#8a7a44","#4a7a5a"][i]));
+  },
+  wardrobe(g,c){
+    const wd=solid(c);
+    part(g,1.2,2.1,.58, 0,1.05,0, wd);
+    part(g,.02,2.02,.03, 0,1.05,.3, solid("#2a2a2a"));
+    part(g,.05,.3,.05, -.12,1.1,.31, solid("#b8a878",{metal:.6,rough:.3}));
+    part(g,.05,.3,.05, .12,1.1,.31, solid("#b8a878",{metal:.6,rough:.3}));
+  },
+  lamp(g,c){
+    part(g,.32,.05,.32, 0,.03,0, solid("#3a3a3c"));
+    part(g,.05,1.3,.05, 0,.7,0, solid("#3a3a3c",{metal:.6,rough:.4}));
+    part(g,.38,.32,.38, 0,1.48,0, solid(c,{em:true,rough:.6}));
+  },
+  rug(g,c){
+    part(g,2.4,.03,1.6, 0,.015,0, solid("#2e2c2a",{rough:1}));
+    part(g,2.2,.04,1.4, 0,.025,0, solid(c,{rough:1}));
+  },
+  plant(g,c){
+    part(g,.32,.3,.32, 0,.15,0, solid("#8a5038"));
+    part(g,.07,.35,.07, 0,.45,0, solid("#5a4028"));
+    part(g,.5,.42,.5, 0,.78,0, solid(c));
+    part(g,.34,.3,.34, 0,1.05,0, solid(c));
+  },
+};
 function matFor(I){
   if(MAT_CACHE[I.id]) return MAT_CACHE[I.id];
   let m;
@@ -829,8 +980,8 @@ function dimsOf(t, r){
   return r%2 ? {hx:T.d/2, hz:T.w/2} : {hx:T.w/2, hz:T.d/2};
 }
 function aabbOf(u){
-  const {hx,hz} = dimsOf(u.t, u.rot), T = ITEMS[u.t];
-  return {minX:u.cx-hx, maxX:u.cx+hx, minY:u.y, maxY:u.y+T.h, minZ:u.cz-hz, maxZ:u.cz+hz};
+  const hx = (u.rot%2 ? u.cd : u.cw)/2, hz = (u.rot%2 ? u.cw : u.cd)/2;
+  return {minX:u.cx-hx, maxX:u.cx+hx, minY:u.y, maxY:u.y+u.ch, minZ:u.cz-hz, maxZ:u.cz+hz};
 }
 function overlapVol(a,b){
   const x = Math.min(a.maxX,b.maxX)-Math.max(a.minX,b.minX);
@@ -838,19 +989,29 @@ function overlapVol(a,b){
   const z = Math.min(a.maxZ,b.maxZ)-Math.max(a.minZ,b.minZ);
   return (x>0 && y>0 && z>0) ? x*y*z : 0;
 }
-function addMod(t, cx, y, cz, r, silent){
+function addMod(t, cx, y, cz, r, silent, opts){
   const T = ITEMS[t];
   if(!T) return null;
-  const m = new THREE.Mesh(geoFor(T), matFor(T));
+  const o = opts || {};
+  const w = o.cw ?? T.w, h = o.ch ?? T.h, d = o.cd ?? T.d;
+  let m;
+  if(T.furn){
+    m = new THREE.Group();
+    BUILDERS[T.furn](m, T.c);
+    m.position.set(cx, y, cz);
+  }else{
+    m = new THREE.Mesh(boxGeo(w,h,d), matFor(T));
+    m.position.set(cx, y+h/2, cz);
+    m.castShadow = !T.trans;
+    m.receiveShadow = true;
+  }
   m.rotation.y = r*Math.PI/2;
-  m.position.set(cx, y+T.h/2, cz);
-  m.castShadow = !T.trans;
-  m.receiveShadow = true;
   const mid = midSeq++;
-  m.userData = {mid, t, cx, y, cz, rot:r};
+  m.userData = {mid, t, cx, y, cz, rot:r, cw:w, ch:h, cd:d,
+    cost: o.cost ?? T.cost, lux: o.lux ?? T.lux};
   scene.add(m);
   blocks.set(mid, m);
-  if(!silent) S.lux += T.lux;
+  if(!silent) S.lux += m.userData.lux;
   return m;
 }
 function delMod(mid){
@@ -858,7 +1019,7 @@ function delMod(mid){
   if(!m) return null;
   scene.remove(m);
   blocks.delete(mid);
-  S.lux -= ITEMS[m.userData.t].lux;
+  S.lux -= m.userData.lux;
   return m.userData;
 }
 function starterPad(){
@@ -890,6 +1051,7 @@ addEventListener("keydown", e=>{
   if(e.code==="KeyE") openCatalog();
   if(e.code==="KeyR") rot = (rot+1)%4;
   if(e.code==="KeyX" && started && !paused) breakBlock();
+  if(e.code==="KeyC") cutAt();
   if(e.code==="KeyB") openShop();
   if(e.code==="KeyN") skipMonth();
 });
@@ -984,6 +1146,7 @@ if(IS_TOUCH){
   $("t-down").addEventListener("touchstart",e=>{e.preventDefault();flyUp=-1});
   $("t-down").addEventListener("touchend",()=>flyUp=0);
   $("t-rot").addEventListener("touchstart",e=>{e.preventDefault(); rot=(rot+1)%4;});
+  $("t-cut").addEventListener("touchstart",e=>{e.preventDefault(); cutAt();});
 }
 
 // ─── 準星射線與構件放置 ─────────────────────────────
@@ -992,7 +1155,7 @@ ray.far = 14;
 const snap = v => Math.round(v*2)/2;
 function targetPlace(){
   ray.setFromCamera({x:0,y:0}, camera);
-  const hits = ray.intersectObjects([...blocks.values(), ground], false);
+  const hits = ray.intersectObjects([...blocks.values(), ground], true);
   if(!hits.length) return null;
   const h = hits[0];
   const {hx,hz} = dimsOf(sel, rot);
@@ -1001,20 +1164,23 @@ function targetPlace(){
     cx = snap(h.point.x); cz = snap(h.point.z); y = 0;
     return {hit:null, place:{cx,cz,y}};
   }
-  const u = h.object.userData;
+  let root = h.object; // 家具是群組，找回構件本體
+  while(root && root.userData.mid === undefined) root = root.parent;
+  if(!root) return null;
+  const u = root.userData;
   const n = h.face.normal.clone().transformDirection(h.object.matrixWorld);
   n.set(Math.round(n.x), Math.round(n.y), Math.round(n.z));
   const A = aabbOf(u);
   if(n.y > 0){          // 頂面：往上疊
     y = A.maxY; cx = snap(h.point.x); cz = snap(h.point.z);
   }else if(n.y < 0){    // 底面：不可放
-    return {hit:h.object, place:null};
+    return {hit:root, place:null};
   }else{                // 側面：貼著接續，同一個基準高度
     y = u.y;
     if(n.x){ cx = snap(n.x>0 ? A.maxX+hx : A.minX-hx); cz = snap(h.point.z); }
     else   { cz = snap(n.z>0 ? A.maxZ+hz : A.minZ-hz); cx = snap(h.point.x); }
   }
-  return {hit:h.object, place:{cx,cz,y:Math.round(y*20)/20}};
+  return {hit:root, place:{cx,cz,y:Math.round(y*20)/20}};
 }
 function validPlace(p){
   const T = ITEMS[sel], {hx,hz} = dimsOf(sel, rot);
@@ -1041,7 +1207,35 @@ function breakBlock(){
   const t = targetPlace();
   if(!t || !t.hit) return;
   const d = delMod(t.hit.userData.mid);
-  if(d){ S.budget += Math.floor(ITEMS[d.t].cost/2); renderHUD(); queueSave(); } // 拆除退一半
+  if(d){ S.budget += Math.floor(d.cost/2); renderHUD(); queueSave(); } // 拆除退一半
+}
+// ─── 切割工具：把構件沿較長邊切成兩半 ───────────────
+function cutMod(mesh){
+  const u = mesh.userData, I = ITEMS[u.t];
+  if(I.furn){ pushLog("event", "家具無法切割。"); return; }
+  const cutW = u.cw >= u.cd;
+  const len = cutW ? u.cw : u.cd;
+  if(len < 1.8){ pushLog("event", "構件已太小，無法再切割。"); return; }
+  const ang = u.rot*Math.PI/2;
+  // 局部 +x / +z 軸在世界座標的方向
+  const ax = cutW ? {x:Math.cos(ang), z:-Math.sin(ang)} : {x:Math.sin(ang), z:Math.cos(ang)};
+  const off = len/4, cost = u.cost, lux = u.lux;
+  const dims = cutW ? {cw:len/2, ch:u.ch, cd:u.cd} : {cw:u.cw, ch:u.ch, cd:len/2};
+  delMod(u.mid);
+  [[1, Math.ceil(lux/2)], [-1, Math.floor(lux/2)]].forEach(([sg, lx])=>{
+    addMod(u.t,
+      Math.round((u.cx + ax.x*off*sg)*100)/100, u.y,
+      Math.round((u.cz + ax.z*off*sg)*100)/100, u.rot, true,
+      {...dims, cost:Math.round(cost/2), lux:lx});
+    S.lux += lx;
+  });
+  pushLog("gain", `已將「${I.name}」切成兩半（各 ${(len/2).toFixed(1)}m）。`);
+  renderHUD(); queueSave();
+}
+function cutAt(){
+  if(!started || paused || S.over) return;
+  const t = targetPlace();
+  if(t && t.hit) cutMod(t.hit);
 }
 
 // ─── HUD ────────────────────────────────────────────
@@ -1273,9 +1467,7 @@ function exportGLB(){
     const group = new THREE.Group();
     group.name = "GoldenManor";
     for(const m of blocks.values()){
-      const c = new THREE.Mesh(m.geometry, m.material);
-      c.position.copy(m.position);
-      c.rotation.copy(m.rotation);
+      const c = m.clone(); // Mesh 或家具 Group 都可
       c.name = m.userData.t.replace(".", "_") + "_" + m.userData.mid;
       group.add(c);
     }
@@ -1340,7 +1532,10 @@ async function download3D(btn){
 const SAVE_KEY = "golden-manor-3d-v3";
 function snapshot(){
   return {...S, sel, recents, mods:[...blocks.values()].map(m=>{
-    const u = m.userData; return [u.t, u.cx, u.y, u.cz, u.rot];
+    const u = m.userData, I = ITEMS[u.t];
+    return (u.cw!==I.w || u.ch!==I.h || u.cd!==I.d)
+      ? [u.t, u.cx, u.y, u.cz, u.rot, u.cw, u.ch, u.cd, u.cost, u.lux]
+      : [u.t, u.cx, u.y, u.cz, u.rot];
   })};
 }
 function queueSave(){
@@ -1355,7 +1550,10 @@ function restore(data){
   S = freshS();
   for(const k of Object.keys(S)) if(k in data && k!=="prot") S[k]=data[k];
   if(data.prot) S.prot = {...S.prot, ...data.prot};
-  for(const [t,cx,y,cz,r] of data.mods||[]) addMod(t, cx, y, cz, r||0, true);
+  for(const e of data.mods||[]){
+    const opts = e.length > 5 ? {cw:e[5], ch:e[6], cd:e[7], cost:e[8], lux:e[9]} : undefined;
+    addMod(e[0], e[1], e[2], e[3], e[4]||0, true, opts);
+  }
   if(Array.isArray(data.recents)){
     const valid = data.recents.filter(id=>ITEMS[id]);
     if(valid.length) recents = valid.slice(0,10);
@@ -1368,15 +1566,17 @@ function showStart(){
   const ctrl = IS_TOUCH ?
     `<table><tr><td>左搖桿</td><td>移動</td></tr><tr><td>右側拖曳</td><td>轉視角</td></tr>` +
     `<tr><td>放置／拆除</td><td>對準星處操作</td></tr><tr><td>旋轉</td><td>轉構件方向</td></tr>` +
-    `<tr><td>建材目錄</td><td>瀏覽全部建材</td></tr><tr><td>上升／下降</td><td>飛行</td></tr></table>` :
+    `<tr><td>建材目錄</td><td>瀏覽全部建材</td></tr><tr><td>切割</td><td>把構件切成兩半</td></tr>` +
+    `<tr><td>上升／下降</td><td>飛行</td></tr></table>` :
     `<table><tr><td>W A S D</td><td>移動</td></tr><tr><td>空白鍵 / Shift</td><td>上升 / 下降（飛行）</td></tr>` +
     `<tr><td>滑鼠</td><td>視角（點畫面鎖定）</td></tr><tr><td>左鍵 / 右鍵</td><td>拆除 / 放置構件</td></tr>` +
     `<tr><td>R</td><td>旋轉構件方向</td></tr><tr><td>E</td><td>開建材目錄</td></tr>` +
+    `<tr><td>C</td><td>切割構件（切成兩半）</td></tr>` +
     `<tr><td>1–0 或滾輪</td><td>快捷列選建材</td></tr><tr><td>B / N</td><td>防災工程 / 跳月</td></tr></table>`;
   $("modal-root").innerHTML =
     `<div class="overlay" id="start"><div class="card">` +
     `<h1>金邸計畫</h1><div class="tag">第一人稱建造版・十二個月・一億預算</div>` +
-    `<p style="font-size:13px">${ITEM_COUNT} 種建材任你組裝——大理石牆、玻璃帷幕、彩色貨櫃、發光板應有盡有。每 ${MONTH_SECS} 秒過一個月，` +
+    `<p style="font-size:13px">${ITEM_COUNT} 種建材與家具任你組裝——牆板可以切割、貨櫃可以疊、室內擺上沙發浴缸。每 ${MONTH_SECS} 秒過一個月，` +
     `小心突發事件與天災——先做防災工程能保住你的心血。</p>` + ctrl +
     `<button class="main" id="go">開始建造</button>` +
     `<div class="foot">比較喜歡 2D 經營版？<a href="classic.html">點這裡</a></div></div></div>`;
