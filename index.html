@@ -704,6 +704,7 @@ addEventListener("keydown", e=>{
     if(n < TYPES.length){ sel = n; renderHotbar(); }
   }
   if(e.code==="KeyR") rot = (rot+1)%4;
+  if(e.code==="KeyX" && started && !paused) breakBlock();
   if(e.code==="KeyB") openShop();
   if(e.code==="KeyN") skipMonth();
 });
@@ -735,7 +736,7 @@ addEventListener("mousemove", e=>{
   }
 });
 cv.addEventListener("mousedown", e=>{
-  if(!started || paused) return;
+  if(IS_TOUCH || !started || paused) return; // 觸控裝置只用畫面按鈕操作，避免誤拆
   if(!locked){
     if(e.button===0){ dragging=true; dragMoved=0; lx=e.clientX; ly=e.clientY; }
     return;
@@ -746,16 +747,15 @@ cv.addEventListener("mousedown", e=>{
 addEventListener("mouseup", e=>{
   if(dragging && e.button===0){
     dragging=false;
-    if(dragMoved < 6){
-      // 純點擊：優先鎖定滑鼠；若環境不支援鎖定，則當作拆除
-      tryLock();
-      setTimeout(()=>{ if(!locked && started && !paused) breakBlock(); }, 250);
-    }
+    if(dragMoved < 6) tryLock(); // 純點擊只做鎖定，不再自動當拆除
   }
+});
+cv.addEventListener("dblclick", ()=>{ // 無法鎖定滑鼠的環境：雙擊拆除
+  if(!IS_TOUCH && started && !paused && !locked) breakBlock();
 });
 cv.addEventListener("contextmenu", e=>{
   e.preventDefault();
-  if(started && !paused && !locked) placeBlock();
+  if(!IS_TOUCH && started && !paused && !locked) placeBlock();
 });
 
 // ─── 觸控 ───────────────────────────────────────────
