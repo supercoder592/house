@@ -270,7 +270,7 @@
   <button class="hbtn" id="btn-cat">建材目錄 (E)</button>
   <button class="hbtn" id="btn-shop">防災工程 (B)</button>
   <button class="hbtn" id="btn-skip">跳到下個月 (N)</button>
-  <button class="hbtn" id="btn-sell" hidden>出售建案</button>
+  <button class="hbtn" id="btn-sell" hidden>出售 / 出租</button>
   <button class="hbtn" id="btn-dl">下載 3D</button>
 </div>
 <div class="hud" id="hint" hidden></div>
@@ -527,7 +527,7 @@ const CAREER_CAP = 20000; // 建設公司起始資金（萬）
 // ─── 狀態 ───────────────────────────────────────────
 let S, blocks, paused = true, started = false, monthT = 0, shakeT = 0, saveTimer = null, canResume = false;
 function freshS(){ return {budget:10000, lux:0, month:1, over:false,
-  mode:"classic", county:null, projects:0,
+  mode:"classic", county:null, projects:0, projStart:1, rentals:[],
   prot:{quake:false, typhoon:false, fire:false, flood:false}}; }
 
 // ─── Three.js 場景 ──────────────────────────────────
@@ -1323,7 +1323,9 @@ function renderHUD(){
   $("s-month").textContent =
     S.over ? "結束" :
     S.mode==="free" ? "自由建造" :
-    S.mode==="career" ? `${S.county!=null ? COUNTIES[S.county].name : "—"}・${S.month}月` :
+    S.mode==="career" ? (S.county!=null
+      ? `${COUNTIES[S.county].name}・工期${S.month-S.projStart}月`
+      : `${S.month}月・待標地`) :
     `第 ${S.month} 月`;
   for(const p of PROTS) $("p-"+p.key).classList.toggle("on", S.prot[p.key]);
 }
@@ -1370,6 +1372,12 @@ function advanceMonth(){
   monthT = 0;
   if(S.mode==="classic" && S.month >= MONTHS){ finish(); return; }
   S.month++;
+  // 建設公司：出租資產每月進帳
+  if(S.mode==="career" && S.rentals && S.rentals.length){
+    const total = S.rentals.reduce((a,r)=>a+r.rent, 0);
+    S.budget += total;
+    pushLog("gain", `收到租金 ${W(total)}（${S.rentals.length} 筆出租資產）。`);
+  }
   const r = Math.random();
   if(r < .30) fireDisaster();
   else if(r < .62) fireEvent();
@@ -1687,7 +1695,7 @@ function showStart(){
     `<div class="shoprow" style="cursor:pointer" id="md-free"><span class="ic">🏖️</span>` +
     `<div class="inf"><div class="n">自由建造</div><div class="d">不限時間、預算無限、沒有天災，盡情創作</div></div></div>` +
     `<div class="shoprow" style="cursor:pointer" id="md-career"><span class="ic">🏢</span>` +
-    `<div class="inf"><div class="n">建設公司</div><div class="d">${W(CAREER_CAP)} 創業，在台灣 22 縣市競標土地、蓋屋出售——各地地價、天災、地形都不同</div></div></div>` +
+    `<div class="inf"><div class="n">建設公司</div><div class="d">${W(CAREER_CAP)} 創業，在台灣 22 縣市競標土地——工期超過 ${MIN_BUILD_MONTHS} 個月後可出售或出租收租金；各地地價、天災、地形都不同</div></div></div>` +
     `<details style="margin-top:12px;font-size:12px;color:var(--muted)"><summary style="cursor:pointer">操作說明</summary>${ctrl}</details>` +
     `<div class="foot">比較喜歡 2D 經營版？<a href="classic.html">點這裡</a></div></div></div>`;
   if(resume) $("md-resume").addEventListener("click", ()=>{
@@ -1745,20 +1753,41 @@ function openBidding(){
   paused = true;
   document.exitPointerLock && document.exitPointerLock();
   if(!plots) plots = genPlots();
-  if(S.budget < Math.min(...plots.map(p=>p.base)) && blocks.size === 0){
-    endGame("💸", "公司倒閉", "資金不足以競標任何土地，建設公司黯然熄燈。");
+  if(S.budget < Math.min(...plots.map(p=>p.base)) && blocks.size === 0 && !(S.rentals && S.rentals.length)){
+    endGame("💸", "公司倒閉", "資金不足以競標任何土地，也沒有資產可變現，建設公司黯然熄燈。");
     return;
   }
+  const portfolio = (S.rentals && S.rentals.length)
+    ? `<div class="catfam">── 出租中資產（每月收租）──</div>` +
+      S.rentals.map((r2,j)=>{
+        const c = COUNTIES[r2.ci], resale = Math.round(saleValue(r2.lux, c)*.9);
+        return `<div class="shoprow"><span class="ic">🏠</span>` +
+          `<div class="inf"><div class="n">${c.name}物業　<span style="color:var(--good)">月租 ${W(r2.rent)}</span></div>` +
+          `<div class="d">豪華度 ${r2.lux}｜轉售價 ${W(resale)}（九折屋齡折舊）</div></div>` +
+          `<button data-r="${j}">售出</button></div>`;
+      }).join("")
+    : "";
   $("modal-root").innerHTML =
     `<div class="overlay"><div class="card catalog" style="max-width:560px">` +
     `<h3>土地競標<span class="catcount">資金 ${W(S.budget)}</span></h3>` +
-    `<p style="font-size:12px;color:var(--muted);text-align:left;margin:0 0 8px">本期釋出三筆土地。選一筆與其他建商競價——得標後就在那裡蓋屋，完工按「出售建案」賺取價差。</p>` +
+    `<p style="font-size:12px;color:var(--muted);text-align:left;margin:0 0 8px">本期釋出三筆土地。選一筆與其他建商競價——得標後蓋屋，工期超過 ${MIN_BUILD_MONTHS} 個月即可出售或出租。</p>` +
     plots.map((p,j)=>plotRow(p,j)).join("") +
+    portfolio +
     `<button class="main" id="bid-refresh" style="margin-top:14px">重新招標（換一批土地）</button></div></div>`;
   $("modal-root").querySelectorAll(".shoprow[data-j]").forEach(el=>
     el.addEventListener("click", ()=>{
       const p = plots[+el.dataset.j];
       if(S.budget >= p.base) startBid(p);
+    }));
+  $("modal-root").querySelectorAll("button[data-r]").forEach(b=>
+    b.addEventListener("click", e=>{
+      e.stopPropagation();
+      const j = +b.dataset.r, r2 = S.rentals[j], c = COUNTIES[r2.ci];
+      const resale = Math.round(saleValue(r2.lux, c)*.9);
+      S.budget += resale;
+      S.rentals.splice(j,1);
+      pushLog("gain", `售出${c.name}出租物業，入帳 ${W(resale)}。`);
+      queueSave(); renderHUD(); openBidding();
     }));
   $("bid-refresh").addEventListener("click", ()=>{ plots = genPlots(); openBidding(); });
 }
@@ -1816,6 +1845,7 @@ function winBid(){
   const b = bidState, c = COUNTIES[b.p.ci];
   S.budget -= b.price;
   S.county = b.p.ci;
+  S.projStart = S.month;
   S.prot = {quake:false, typhoon:false, fire:false, flood:false};
   clearWorld(); S.lux = 0;
   applyTerrain(S.county);
@@ -1826,29 +1856,58 @@ function winBid(){
   renderHUD(); queueSave();
   enterWorld();
 }
+const MIN_BUILD_MONTHS = 12; // 工期須「超過」12 個月才能結案
+function saleValue(lux, c){ return Math.round(lux * (8 + c.price*2.2)); }
+function finishProject(kind){ // "sale" | "rent"
+  const c = COUNTIES[S.county];
+  const sale = saleValue(S.lux, c);
+  if(kind === "sale"){
+    S.budget += sale;
+    pushLog("gain", `${c.name}建案以 ${W(sale)} 售出！（第 ${S.projects+1} 個完工案）`);
+  }else{
+    const rent = Math.max(1, Math.round(sale/45));
+    S.rentals.push({ci:S.county, lux:S.lux, rent});
+    pushLog("gain", `${c.name}建案開始出租，月租金 ${W(rent)}。資產交由物業管理。`);
+  }
+  S.projects++;
+  clearWorld(); S.lux = 0; S.county = null;
+  applyTerrain(null);
+  renderHUD(); queueSave();
+  openBidding();
+}
 function sellProject(){
   if(S.mode !== "career" || S.over || paused) return;
   if(S.county == null){ openBidding(); return; }
-  if(S.lux <= 0){ pushLog("event", "還沒有任何建設，無法出售。"); return; }
+  if(S.lux <= 0){ pushLog("event", "還沒有任何建設，無法結案。"); return; }
   const c = COUNTIES[S.county];
-  const sale = Math.round(S.lux * (8 + c.price*2.2));
+  const dur = S.month - S.projStart;
   paused = true;
   document.exitPointerLock && document.exitPointerLock();
+  if(dur <= MIN_BUILD_MONTHS){
+    $("modal-root").innerHTML =
+      `<div class="overlay"><div class="card"><div class="big">🚧</div><h3>工程尚未完工</h3>` +
+      `<p>${c.name}建案目前工期 ${dur} 個月。</p>` +
+      `<p style="font-size:13px;color:var(--muted)">依法工期須超過 ${MIN_BUILD_MONTHS} 個月才能申請使照——還差 ${MIN_BUILD_MONTHS+1-dur} 個月（可按 N 跳月趕工）。</p>` +
+      `<button class="main" id="sell-no">回到工地</button></div></div>`;
+    $("sell-no").addEventListener("click", ()=>{
+      $("modal-root").innerHTML = ""; paused = false;
+      if(!IS_TOUCH) tryLock();
+    });
+    return;
+  }
+  const sale = saleValue(S.lux, c);
+  const rent = Math.max(1, Math.round(sale/45));
   $("modal-root").innerHTML =
-    `<div class="overlay"><div class="card"><div class="big">🏷️</div><h3>出售建案</h3>` +
-    `<p>${c.name}建案　豪華度 ${S.lux} × 地價係數 ${(8+c.price*2.2).toFixed(1)}</p>` +
-    `<div class="effect good">預估售價 ${W(sale)}</div>` +
-    `<div style="display:flex;gap:10px;justify-content:center;margin-top:16px">` +
-    `<button class="main" id="sell-ok">確認出售</button>` +
+    `<div class="overlay"><div class="card"><div class="big">🏷️</div><h3>建案結算</h3>` +
+    `<p>${c.name}建案　工期 ${dur} 個月　豪華度 ${S.lux}</p>` +
+    `<div class="effect good">出售：一次入帳 ${W(sale)}</div>` +
+    `<div class="effect good">出租：每月收租 ${W(rent)}，資產保留日後可售</div>` +
+    `<div style="display:flex;gap:10px;justify-content:center;margin-top:16px;flex-wrap:wrap">` +
+    `<button class="main" id="sell-ok" style="margin-top:0">立即出售</button>` +
+    `<button class="main" id="rent-ok" style="margin-top:0;background:var(--good)">出租</button>` +
     `<button class="alt" id="sell-no" style="margin-top:0">再想想</button></div></div></div>`;
-  $("sell-ok").addEventListener("click", ()=>{
-    S.budget += sale; S.projects++;
-    pushLog("gain", `${c.name}建案以 ${W(sale)} 售出！（第 ${S.projects} 個完工案）`);
-    clearWorld(); S.lux = 0; S.county = null;
-    applyTerrain(null);
-    renderHUD(); queueSave();
-    openBidding();
-  });
+  $("sell-ok").addEventListener("click", ()=>finishProject("sale"));
+  $("rent-ok").addEventListener("click", ()=>finishProject("rent"));
   $("sell-no").addEventListener("click", ()=>{
     $("modal-root").innerHTML = ""; paused = false;
     if(!IS_TOUCH) tryLock();
