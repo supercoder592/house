@@ -252,7 +252,7 @@
 <div id="app"></div>
 
 <div class="hud" id="stats">
-  <div class="stat"><div class="label">預算</div><div class="value" id="s-budget">10,000萬</div></div>
+  <div class="stat"><div class="label" id="s-budget-label">預算</div><div class="value" id="s-budget">10,000萬</div></div>
   <div class="stat"><div class="label">豪華度</div><div class="value plain" id="s-lux">0</div></div>
   <div class="stat"><div class="label">進度</div><div class="value plain" id="s-month">第 1 月</div>
     <div id="monthbar"><i id="monthfill"></i></div></div>
@@ -270,6 +270,8 @@
   <button class="hbtn" id="btn-cat">建材目錄 (E)</button>
   <button class="hbtn" id="btn-shop">防災工程 (B)</button>
   <button class="hbtn" id="btn-skip">跳到下個月 (N)</button>
+  <button class="hbtn" id="btn-sell" hidden>出售建案</button>
+  <button class="hbtn" id="btn-dl">下載 3D</button>
 </div>
 <div class="hud" id="hint" hidden></div>
 
@@ -492,9 +494,40 @@ const EVENTS = [
   {icon:"📰", name:"雜誌專訪",   flavor:"居家雜誌以你的宅邸做封面故事。", lux:20, cash:200},
 ];
 
+// ─── 台灣縣市（建設公司模式：地價／天災風險／地形）────
+// price=地價指數(1-10)；quake/typhoon/flood=風險倍率；terrain=plain|hill|mount|coast
+const COUNTIES = [
+  {name:"台北市", price:10, quake:1.2, typhoon:1,   flood:.8,  terrain:"hill",  info:"寸土寸金的首都盆地"},
+  {name:"新北市", price:8,  quake:1.2, typhoon:1,   flood:1,   terrain:"hill",  info:"環繞盆地的丘陵城市"},
+  {name:"桃園市", price:6,  quake:.8,  typhoon:1,   flood:.8,  terrain:"plain", info:"平坦台地，機場門戶"},
+  {name:"新竹市", price:7,  quake:1,   typhoon:1,   flood:.6,  terrain:"plain", info:"科技新貴聚落，風大"},
+  {name:"新竹縣", price:5,  quake:1.1, typhoon:.9,  flood:.6,  terrain:"hill",  info:"丘陵與科學園區"},
+  {name:"苗栗縣", price:3,  quake:1.2, typhoon:.8,  flood:.6,  terrain:"hill",  info:"山城丘陵地"},
+  {name:"台中市", price:7,  quake:1.3, typhoon:.7,  flood:.7,  terrain:"plain", info:"盆地氣候宜人，但有斷層帶"},
+  {name:"彰化縣", price:4,  quake:1.1, typhoon:.9,  flood:1.1, terrain:"plain", info:"平原農業大縣"},
+  {name:"南投縣", price:3,  quake:1.5, typhoon:.7,  flood:.9,  terrain:"mount", info:"全台唯一不靠海，群山環繞"},
+  {name:"雲林縣", price:3,  quake:1,   typhoon:1,   flood:1.3, terrain:"plain", info:"地層下陷，易淹水"},
+  {name:"嘉義市", price:4,  quake:1.4, typhoon:.9,  flood:.9,  terrain:"plain", info:"阿里山腳下的小城"},
+  {name:"嘉義縣", price:3,  quake:1.4, typhoon:1,   flood:1.2, terrain:"plain", info:"沿海平原，斷層通過"},
+  {name:"台南市", price:6,  quake:1.3, typhoon:1,   flood:1.3, terrain:"plain", info:"古都平原，午後雷雨多"},
+  {name:"高雄市", price:7,  quake:1,   typhoon:1.2, flood:1.3, terrain:"coast", info:"港都，颱風豪雨常客"},
+  {name:"屏東縣", price:3,  quake:1,   typhoon:1.5, flood:1.3, terrain:"coast", info:"國境之南，颱風首當其衝"},
+  {name:"宜蘭縣", price:4,  quake:1.1, typhoon:1.5, flood:1.4, terrain:"plain", info:"多雨的蘭陽平原"},
+  {name:"花蓮縣", price:3,  quake:1.8, typhoon:1.4, flood:1,   terrain:"mount", info:"斷層帶上的山海縣"},
+  {name:"台東縣", price:2,  quake:1.5, typhoon:1.6, flood:1,   terrain:"coast", info:"颱風登陸熱區，好山好水"},
+  {name:"基隆市", price:4,  quake:.8,  typhoon:1.4, flood:1.4, terrain:"coast", info:"雨都山城港口"},
+  {name:"澎湖縣", price:2,  quake:.5,  typhoon:1.6, flood:.8,  terrain:"coast", info:"海島強風，但地震少"},
+  {name:"金門縣", price:3,  quake:.4,  typhoon:1,   flood:.6,  terrain:"plain", info:"花崗岩島，地質最穩"},
+  {name:"連江縣", price:2,  quake:.4,  typhoon:1.1, flood:.7,  terrain:"coast", info:"馬祖列島，石頭屋故鄉"},
+];
+const TERRAIN_NAME = {plain:"平原", hill:"丘陵", mount:"山地", coast:"海濱"};
+const riskLabel = v => v>=1.4 ? "高" : v>=1 ? "中" : "低";
+const CAREER_CAP = 20000; // 建設公司起始資金（萬）
+
 // ─── 狀態 ───────────────────────────────────────────
-let S, blocks, paused = true, started = false, monthT = 0, shakeT = 0, saveTimer = null;
+let S, blocks, paused = true, started = false, monthT = 0, shakeT = 0, saveTimer = null, canResume = false;
 function freshS(){ return {budget:10000, lux:0, month:1, over:false,
+  mode:"classic", county:null, projects:0,
   prot:{quake:false, typhoon:false, fire:false, flood:false}}; }
 
 // ─── Three.js 場景 ──────────────────────────────────
@@ -973,6 +1006,47 @@ function fireFlash(){
   setTimeout(()=>{ f.style.transition = "opacity 2.4s"; f.style.opacity = "0"; }, 400);
 }
 
+// ─── 縣市地形（建設公司模式）───────────────────────
+let terrainGroup = null;
+function applyTerrain(ci){
+  if(terrainGroup){ scene.remove(terrainGroup); terrainGroup = null; }
+  terrainGroup = new THREE.Group();
+  const c = ci != null ? COUNTIES[ci] : null;
+  if(c){
+    const t = c.terrain;
+    if(t === "hill" || t === "mount"){
+      const n = t === "hill" ? 12 : 9;
+      for(let i=0;i<n;i++){
+        const ang = R(0, 6.28), dist = R(RANGE+12, RANGE+45);
+        let m;
+        if(t === "hill"){
+          m = new THREE.Mesh(new THREE.SphereGeometry(R(7,15), 12, 8), solid("#3c5233", {rough:1}));
+          m.scale.y = R(.22, .38);
+          m.position.set(Math.cos(ang)*dist, 0, Math.sin(ang)*dist);
+        }else{
+          const h = R(16, 34);
+          m = new THREE.Mesh(new THREE.ConeGeometry(R(11,22), h, 5), solid("#4a5244", {rough:1}));
+          m.position.set(Math.cos(ang)*dist, h/2, Math.sin(ang)*dist);
+          m.rotation.y = R(0, 6.28);
+        }
+        terrainGroup.add(m);
+      }
+    }
+    if(t === "coast"){
+      const sea = new THREE.Mesh(new THREE.PlaneGeometry(320, 130),
+        new THREE.MeshStandardMaterial({color:0x2e6a9a, roughness:.12, transparent:true, opacity:.92, envMapIntensity:1}));
+      sea.rotation.x = -Math.PI/2;
+      sea.position.set(0, .04, RANGE+72);
+      terrainGroup.add(sea);
+      const sand = new THREE.Mesh(new THREE.PlaneGeometry(320, 16), solid("#c8b88a", {rough:1}));
+      sand.rotation.x = -Math.PI/2;
+      sand.position.set(0, .03, RANGE+9);
+      terrainGroup.add(sand);
+    }
+  }
+  scene.add(terrainGroup);
+}
+
 // ─── 構件資料 ───────────────────────────────────────
 let midSeq = 1;
 function dimsOf(t, r){
@@ -1198,16 +1272,19 @@ function placeBlock(){
   const t = targetPlace();
   if(!t || !t.place || !validPlace(t.place)) return;
   const T = ITEMS[sel];
-  if(S.budget < T.cost){ pushLog("event", `預算不足，「${T.name}」要 ${W(T.cost)}。`); renderHUD(); return; }
+  if(S.mode !== "free"){
+    if(S.budget < T.cost){ pushLog("event", `預算不足，「${T.name}」要 ${W(T.cost)}。`); renderHUD(); return; }
+    S.budget -= T.cost;
+  }
   addMod(sel, t.place.cx, t.place.y, t.place.cz, rot);
-  S.budget -= T.cost; renderHUD(); queueSave();
+  renderHUD(); queueSave();
 }
 function breakBlock(){
   if(S.over) return;
   const t = targetPlace();
   if(!t || !t.hit) return;
   const d = delMod(t.hit.userData.mid);
-  if(d){ S.budget += Math.floor(d.cost/2); renderHUD(); queueSave(); } // 拆除退一半
+  if(d){ if(S.mode!=="free") S.budget += Math.floor(d.cost/2); renderHUD(); queueSave(); } // 拆除退一半
 }
 // ─── 切割工具：把構件沿較長邊切成兩半 ───────────────
 function cutMod(mesh){
@@ -1240,11 +1317,23 @@ function cutAt(){
 
 // ─── HUD ────────────────────────────────────────────
 function renderHUD(){
-  $("s-budget").textContent = W(S.budget);
-  $("s-budget").className = "value" + (S.budget<0 ? " debt" : "");
+  $("s-budget").textContent = S.mode==="free" ? "∞" : W(S.budget);
+  $("s-budget").className = "value" + (S.mode!=="free" && S.budget<0 ? " debt" : "");
   $("s-lux").textContent = S.lux;
-  $("s-month").textContent = S.over ? "完工" : `第 ${S.month} 月`;
+  $("s-month").textContent =
+    S.over ? "結束" :
+    S.mode==="free" ? "自由建造" :
+    S.mode==="career" ? `${S.county!=null ? COUNTIES[S.county].name : "—"}・${S.month}月` :
+    `第 ${S.month} 月`;
   for(const p of PROTS) $("p-"+p.key).classList.toggle("on", S.prot[p.key]);
+}
+function applyMode(){
+  const m = S.mode;
+  $("s-budget-label").textContent = m === "career" ? "資金" : "預算";
+  $("btn-skip").hidden = m === "free";
+  $("btn-shop").hidden = m === "free";
+  $("btn-sell").hidden = m !== "career";
+  $("monthbar").style.display = m === "free" ? "none" : "";
 }
 function renderHotbar(){
   const bar = $("hotbar");
@@ -1275,11 +1364,11 @@ function pushLog(cls, text){
 function showHint(t){ const h=$("hint"); h.textContent=t; h.hidden=!t; }
 
 // ─── 月份與事件 ─────────────────────────────────────
-function skipMonth(){ if(started && !paused && !S.over) advanceMonth(); }
+function skipMonth(){ if(started && !paused && !S.over && S.mode!=="free") advanceMonth(); }
 $("btn-skip").addEventListener("click", e=>{ e.currentTarget.blur(); skipMonth(); });
 function advanceMonth(){
   monthT = 0;
-  if(S.month >= MONTHS){ finish(); return; }
+  if(S.mode==="classic" && S.month >= MONTHS){ finish(); return; }
   S.month++;
   const r = Math.random();
   if(r < .30) fireDisaster();
@@ -1289,7 +1378,18 @@ function advanceMonth(){
 }
 
 function fireDisaster(){
-  const d = DISASTERS[Math.floor(Math.random()*DISASTERS.length)];
+  // 建設公司模式：依縣市風險加權挑選天災、放大損失
+  const county = S.mode==="career" && S.county!=null ? COUNTIES[S.county] : null;
+  const riskOf = k => county ? ({quake:county.quake, typhoon:county.typhoon, fire:1, flood:county.flood})[k] : 1;
+  let d;
+  if(county){
+    const ws = DISASTERS.map(x=>riskOf(x.key));
+    let r2 = Math.random() * ws.reduce((a,b)=>a+b,0);
+    d = DISASTERS[ws.findIndex(w => (r2 -= w) <= 0)] || DISASTERS[0];
+  }else{
+    d = DISASTERS[Math.floor(Math.random()*DISASTERS.length)];
+  }
+  const riskMult = riskOf(d.key);
   const safe = S.prot[d.key];
   const effects = [];
   let removed = 0;
@@ -1302,7 +1402,7 @@ function fireDisaster(){
       if(delMod(k)) removed++;
     }
   }
-  const cash = safe ? d.lightCash : d.cash;
+  const cash = Math.round((safe ? d.lightCash : d.cash) * riskMult);
   S.budget -= cash;
   effects.push({text:`修繕費 −${W(cash)}`, good:false});
   if(removed) effects.push({text:`${removed} 件建築構件被摧毀`, good:false});
@@ -1383,7 +1483,7 @@ function renderCatalog(){
 // ─── 防災商店 ───────────────────────────────────────
 $("btn-shop").addEventListener("click", e=>{ e.currentTarget.blur(); openShop(); });
 function openShop(){
-  if(!started || S.over) return;
+  if(!started || S.over || S.mode==="free") return;
   paused = true;
   document.exitPointerLock && document.exitPointerLock();
   const rows = PROTS.map(p=>{
@@ -1414,6 +1514,7 @@ function openShop(){
 
 // ─── 結局 ───────────────────────────────────────────
 function checkBankrupt(){
+  if(S.mode === "free") return false;
   if(S.budget < -500 && !S.over){
     endGame("💸", "破產收場", "負債累累，豪宅夢碎。記得留週轉金，並及早施作防災工程。");
     return true;
@@ -1445,17 +1546,17 @@ function endGame(icon, rank, note, score){
     `<div class="rank">${rank}</div><p>${note}</p><table>${rows}</table>` +
     `<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">` +
     `<button class="alt" id="dl3d">下載 3D 模型</button>` +
-    `<button class="main" id="restart">再蓋一棟</button></div>` +
+    `<button class="main" id="restart">回主選單</button></div>` +
     `<p style="font-size:11px;color:var(--muted);margin:8px 0 0">GLB 格式，可匯入 Blender 等 3D 軟體</p></div></div>`;
   $("dl3d").addEventListener("click", ()=>download3D($("dl3d")));
   $("restart").addEventListener("click", ()=>{
-    for(const k of [...blocks.keys()]){ const m=blocks.get(k); scene.remove(m); blocks.delete(k); }
-    S = freshS(); monthT = 0; starterPad();
+    clearWorld();
+    S = freshS(); monthT = 0;
+    applyTerrain(null);
     try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
-    $("modal-root").innerHTML = ""; paused = false;
-    pushLog("gain", "新的一年開始，重新開工！");
-    renderHUD(); queueSave();
-    if(!IS_TOUCH) tryLock();
+    started = false; paused = true; canResume = false;
+    applyMode(); renderHUD();
+    showStart();
   });
 }
 
@@ -1507,6 +1608,7 @@ function buildZip(name, u8){
   return out;
 }
 async function download3D(btn){
+  const orig = btn.textContent;
   btn.disabled = true; btn.textContent = "匯出中…";
   try{
     const glb = await exportGLB();
@@ -1525,7 +1627,7 @@ async function download3D(btn){
   }catch(err){
     btn.textContent = err && err.code === "declined" ? "已取消" : "匯出失敗";
   }
-  setTimeout(()=>{ btn.disabled = false; btn.textContent = "下載 3D 模型"; }, 2600);
+  setTimeout(()=>{ btn.disabled = false; btn.textContent = orig; }, 2600);
 }
 
 // ─── 存檔 ───────────────────────────────────────────
@@ -1573,21 +1675,187 @@ function showStart(){
     `<tr><td>R</td><td>旋轉構件方向</td></tr><tr><td>E</td><td>開建材目錄</td></tr>` +
     `<tr><td>C</td><td>切割構件（切成兩半）</td></tr>` +
     `<tr><td>1–0 或滾輪</td><td>快捷列選建材</td></tr><tr><td>B / N</td><td>防災工程 / 跳月</td></tr></table>`;
+  const resume = canResume && !S.over
+    ? `<div class="shoprow owned" style="cursor:pointer" id="md-resume"><span class="ic">▶️</span>` +
+      `<div class="inf"><div class="n">繼續上次遊戲</div><div class="d">接續你的存檔進度</div></div></div>` : "";
   $("modal-root").innerHTML =
     `<div class="overlay" id="start"><div class="card">` +
-    `<h1>金邸計畫</h1><div class="tag">第一人稱建造版・十二個月・一億預算</div>` +
-    `<p style="font-size:13px">${ITEM_COUNT} 種建材與家具任你組裝——牆板可以切割、貨櫃可以疊、室內擺上沙發浴缸。每 ${MONTH_SECS} 秒過一個月，` +
-    `小心突發事件與天災——先做防災工程能保住你的心血。</p>` + ctrl +
-    `<button class="main" id="go">開始建造</button>` +
+    `<h1>金邸計畫</h1><div class="tag">${ITEM_COUNT} 種建材・切割工具・台灣 22 縣市</div>` +
+    resume +
+    `<div class="shoprow" style="cursor:pointer" id="md-classic"><span class="ic">⏳</span>` +
+    `<div class="inf"><div class="n">經典挑戰</div><div class="d">一億預算、十二個月，在天災中蓋出傳世豪邸</div></div></div>` +
+    `<div class="shoprow" style="cursor:pointer" id="md-free"><span class="ic">🏖️</span>` +
+    `<div class="inf"><div class="n">自由建造</div><div class="d">不限時間、預算無限、沒有天災，盡情創作</div></div></div>` +
+    `<div class="shoprow" style="cursor:pointer" id="md-career"><span class="ic">🏢</span>` +
+    `<div class="inf"><div class="n">建設公司</div><div class="d">${W(CAREER_CAP)} 創業，在台灣 22 縣市競標土地、蓋屋出售——各地地價、天災、地形都不同</div></div></div>` +
+    `<details style="margin-top:12px;font-size:12px;color:var(--muted)"><summary style="cursor:pointer">操作說明</summary>${ctrl}</details>` +
     `<div class="foot">比較喜歡 2D 經營版？<a href="classic.html">點這裡</a></div></div></div>`;
-  $("go").addEventListener("click", ()=>{
+  if(resume) $("md-resume").addEventListener("click", ()=>{
     $("modal-root").innerHTML = "";
-    started = true; paused = false;
-    if(IS_TOUCH){ try{ document.documentElement.requestFullscreen?.(); }catch(e){} }
-    else tryLock();
-    pushLog("gain", "開工！先鋪地基，記得留錢做防災工程。");
+    started = true;
+    if(S.mode === "career" && S.county == null){ openBidding(); }
+    else{ paused = false; enterWorld(); }
+  });
+  $("md-classic").addEventListener("click", ()=>startMode("classic"));
+  $("md-free").addEventListener("click", ()=>startMode("free"));
+  $("md-career").addEventListener("click", ()=>startMode("career"));
+}
+function enterWorld(){
+  if(IS_TOUCH){ try{ document.documentElement.requestFullscreen?.(); }catch(e){} }
+  else tryLock();
+}
+function clearWorld(){
+  for(const k of [...blocks.keys()]){ scene.remove(blocks.get(k)); blocks.delete(k); }
+}
+function startMode(m){
+  clearWorld();
+  try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
+  S = freshS(); S.mode = m; monthT = 0;
+  applyTerrain(null);
+  if(m === "career") S.budget = CAREER_CAP;
+  else starterPad();
+  applyMode(); renderHUD(); renderHotbar();
+  $("modal-root").innerHTML = "";
+  started = true; paused = false;
+  if(m === "career"){
+    pushLog("gain", `建設公司成立！資本額 ${W(CAREER_CAP)}，先競標一塊土地吧。`);
+    openBidding();
+  }else{
+    pushLog("gain", m === "free" ? "自由建造模式：盡情發揮，想拆想蓋都不用錢。" : "開工！先鋪地基，記得留錢做防災工程。");
+    enterWorld();
+  }
+  queueSave();
+}
+
+// ─── 建設公司：土地競標與出售 ───────────────────────
+let plots = null, bidState = null;
+function genPlots(){
+  const idx = COUNTIES.map((c,i)=>i).sort(()=>Math.random()-.5).slice(0,3);
+  return idx.map(i=>({ci:i, base: Math.round(COUNTIES[i].price*800*R(.85,1.2)/10)*10}));
+}
+function plotRow(p, j){
+  const c = COUNTIES[p.ci];
+  const afford = S.budget >= p.base;
+  return `<div class="shoprow" style="cursor:${afford?"pointer":"default"};opacity:${afford?1:.45}" data-j="${j}">` +
+    `<span class="ic">${{plain:"🌾",hill:"⛰️",mount:"🏔️",coast:"🌊"}[c.terrain]}</span>` +
+    `<div class="inf"><div class="n">${c.name}　<span style="color:var(--gold)">底價 ${W(p.base)}</span></div>` +
+    `<div class="d">${TERRAIN_NAME[c.terrain]}｜地價 ${c.price}/10｜震 ${riskLabel(c.quake)}・颱 ${riskLabel(c.typhoon)}・洪 ${riskLabel(c.flood)}｜${c.info}</div></div></div>`;
+}
+function openBidding(){
+  paused = true;
+  document.exitPointerLock && document.exitPointerLock();
+  if(!plots) plots = genPlots();
+  if(S.budget < Math.min(...plots.map(p=>p.base)) && blocks.size === 0){
+    endGame("💸", "公司倒閉", "資金不足以競標任何土地，建設公司黯然熄燈。");
+    return;
+  }
+  $("modal-root").innerHTML =
+    `<div class="overlay"><div class="card catalog" style="max-width:560px">` +
+    `<h3>土地競標<span class="catcount">資金 ${W(S.budget)}</span></h3>` +
+    `<p style="font-size:12px;color:var(--muted);text-align:left;margin:0 0 8px">本期釋出三筆土地。選一筆與其他建商競價——得標後就在那裡蓋屋，完工按「出售建案」賺取價差。</p>` +
+    plots.map((p,j)=>plotRow(p,j)).join("") +
+    `<button class="main" id="bid-refresh" style="margin-top:14px">重新招標（換一批土地）</button></div></div>`;
+  $("modal-root").querySelectorAll(".shoprow[data-j]").forEach(el=>
+    el.addEventListener("click", ()=>{
+      const p = plots[+el.dataset.j];
+      if(S.budget >= p.base) startBid(p);
+    }));
+  $("bid-refresh").addEventListener("click", ()=>{ plots = genPlots(); openBidding(); });
+}
+function startBid(p){
+  bidState = {p, price:p.base, leader:null,
+    ais:[{name:"寶島建設", cap:Math.round(p.base*R(1.12,1.9)), out:false},
+         {name:"大山開發", cap:Math.round(p.base*R(1.05,1.6)), out:false}],
+    log:[`起標：底價 ${W(p.base)}`]};
+  renderBid();
+}
+function renderBid(){
+  const b = bidState, c = COUNTIES[b.p.ci];
+  const youLead = b.leader === "你";
+  const canRaise = S.budget >= (b.leader===null ? b.price : Math.ceil(b.price*1.05));
+  $("modal-root").innerHTML =
+    `<div class="overlay"><div class="card" style="max-width:460px">` +
+    `<div class="big">🔨</div><h3>${c.name}・土地競標</h3>` +
+    `<p style="font-size:20px;font-variant-numeric:tabular-nums">目前 <b style="color:var(--gold)">${W(b.price)}</b>` +
+    `${b.leader ? `　<span style="font-size:13px;color:${youLead?"var(--good)":"var(--bad)"}">${b.leader}領先</span>` : ""}</p>` +
+    `<div style="max-height:130px;overflow-y:auto;text-align:left;font-size:12px;color:var(--muted);background:#20242e;border-radius:8px;padding:8px 12px">` +
+    b.log.map(l=>`<div>${l}</div>`).join("") + `</div>` +
+    `<div style="display:flex;gap:10px;justify-content:center;margin-top:14px">` +
+    `<button class="main" id="bid-raise" ${youLead||!canRaise?"disabled":""} style="${youLead||!canRaise?"opacity:.4":""}">` +
+    (b.leader===null ? `出價 ${W(b.price)}` : `加價至 ${W(Math.ceil(b.price*1.05))}`) + `</button>` +
+    `<button class="alt" id="bid-quit" style="margin-top:0">${youLead?"等待底定":"放棄"}</button></div>` +
+    (!canRaise && !youLead ? `<p style="font-size:12px;color:var(--bad);margin-top:8px">資金不足，無法再加價</p>` : "") +
+    `</div></div>`;
+  $("bid-raise").addEventListener("click", playerBid);
+  $("bid-quit").addEventListener("click", ()=>{
+    if(bidState.leader === "你"){ winBid(); return; } // 你領先時按下即結標
+    pushLog("event", `放棄競標${c.name}土地。`);
+    bidState = null; openBidding();
   });
 }
+function playerBid(){
+  const b = bidState;
+  b.price = b.leader === null ? b.price : Math.ceil(b.price*1.05/10)*10;
+  b.leader = "你";
+  b.log.unshift(`你出價 ${W(b.price)}`);
+  // AI 回應
+  const alive = b.ais.filter(a=>!a.out);
+  for(const a of alive){ if(a.cap <= b.price){ a.out = true; b.log.unshift(`${a.name} 退出競標`); } }
+  const bidders = b.ais.filter(a=>!a.out);
+  if(bidders.length){
+    const a = bidders[Math.floor(Math.random()*bidders.length)];
+    b.price = Math.min(a.cap, Math.ceil(b.price*R(1.05,1.12)/10)*10);
+    b.leader = a.name;
+    b.log.unshift(`${a.name} 出價 ${W(b.price)}`);
+    renderBid();
+  }else{
+    winBid();
+  }
+}
+function winBid(){
+  const b = bidState, c = COUNTIES[b.p.ci];
+  S.budget -= b.price;
+  S.county = b.p.ci;
+  S.prot = {quake:false, typhoon:false, fire:false, flood:false};
+  clearWorld(); S.lux = 0;
+  applyTerrain(S.county);
+  bidState = null; plots = null;
+  pushLog("gain", `以 ${W(b.price)} 得標${c.name}土地（${TERRAIN_NAME[c.terrain]}）！開始蓋屋吧。`);
+  $("modal-root").innerHTML = "";
+  paused = false;
+  renderHUD(); queueSave();
+  enterWorld();
+}
+function sellProject(){
+  if(S.mode !== "career" || S.over || paused) return;
+  if(S.county == null){ openBidding(); return; }
+  if(S.lux <= 0){ pushLog("event", "還沒有任何建設，無法出售。"); return; }
+  const c = COUNTIES[S.county];
+  const sale = Math.round(S.lux * (8 + c.price*2.2));
+  paused = true;
+  document.exitPointerLock && document.exitPointerLock();
+  $("modal-root").innerHTML =
+    `<div class="overlay"><div class="card"><div class="big">🏷️</div><h3>出售建案</h3>` +
+    `<p>${c.name}建案　豪華度 ${S.lux} × 地價係數 ${(8+c.price*2.2).toFixed(1)}</p>` +
+    `<div class="effect good">預估售價 ${W(sale)}</div>` +
+    `<div style="display:flex;gap:10px;justify-content:center;margin-top:16px">` +
+    `<button class="main" id="sell-ok">確認出售</button>` +
+    `<button class="alt" id="sell-no" style="margin-top:0">再想想</button></div></div></div>`;
+  $("sell-ok").addEventListener("click", ()=>{
+    S.budget += sale; S.projects++;
+    pushLog("gain", `${c.name}建案以 ${W(sale)} 售出！（第 ${S.projects} 個完工案）`);
+    clearWorld(); S.lux = 0; S.county = null;
+    applyTerrain(null);
+    renderHUD(); queueSave();
+    openBidding();
+  });
+  $("sell-no").addEventListener("click", ()=>{
+    $("modal-root").innerHTML = ""; paused = false;
+    if(!IS_TOUCH) tryLock();
+  });
+}
+$("btn-sell").addEventListener("click", e=>{ e.currentTarget.blur(); sellProject(); });
+$("btn-dl").addEventListener("click", e=>{ e.currentTarget.blur(); download3D(e.target); });
 
 // ─── 主迴圈 ─────────────────────────────────────────
 const clock = new THREE.Clock();
@@ -1608,10 +1876,12 @@ function tick(){
     camera.position.addScaledVector(f, mz*sp).addScaledVector(r, mx*sp);
     camera.position.y = Math.max(1.2, Math.min(MAX_Y+6, camera.position.y + my*sp));
 
-    // 月份計時
-    monthT += dt;
-    $("monthfill").style.width = Math.min(100, monthT/MONTH_SECS*100)+"%";
-    if(monthT >= MONTH_SECS) advanceMonth();
+    // 月份計時（自由建造模式時間暫停）
+    if(S.mode !== "free"){
+      monthT += dt;
+      $("monthfill").style.width = Math.min(100, monthT/MONTH_SECS*100)+"%";
+      if(monthT >= MONTH_SECS) advanceMonth();
+    }
 
     // 預覽鬼影（金色＝可放，紅色＝不可）
     const t = targetPlace();
@@ -1666,9 +1936,14 @@ function boot(data){
   if(!data){
     try{ data = JSON.parse(localStorage.getItem(SAVE_KEY)); }catch(e){ data = null; }
   }
-  if(data && data.mods && !data.over){ restore(data); }
-  else{ S = freshS(); starterPad(); }
-  renderHUD(); renderHotbar(); showStart(); tick();
+  if(data && data.mods && !data.over){
+    restore(data);
+    canResume = true;
+    if(S.county != null) applyTerrain(S.county);
+  }else{
+    S = freshS();
+  }
+  applyMode(); renderHUD(); renderHotbar(); showStart(); tick();
 }
 window.claude?.hot?.ready ? window.claude.hot.ready(boot) : boot(window.claude?.hot?.data ?? null);
 </script>
