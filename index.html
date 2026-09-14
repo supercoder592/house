@@ -275,6 +275,7 @@
 <div class="hud" id="selinfo"></div>
 <div class="hud" id="hotbar"></div>
 <div class="hud" id="btns">
+  <button class="hbtn" id="btn-tour">參觀 (T)</button>
   <button class="hbtn" id="btn-cat">建材目錄 (E)</button>
   <button class="hbtn" id="btn-shop">防災工程 (B)</button>
   <button class="hbtn" id="btn-skip">跳到下個月 (N)</button>
@@ -869,6 +870,27 @@ const PAINT = {
     }
     speckle(g,s,60,["rgba(255,255,255,.6)"],.35); // 閃光
   },
+  pooltile(g,s,p){ // 泳池底：淺藍磁磚＋光斑
+    g.fillStyle="#cfe4ea"; g.fillRect(0,0,s,s);
+    g.fillStyle=p.c; g.globalAlpha=.15; g.fillRect(0,0,s,s); g.globalAlpha=1;
+    const tw=s/8;
+    for(let r2=0;r2<8;r2++) for(let c2=0;c2<8;c2++){
+      g.fillStyle=`rgba(${Math.random()<.5?"255,255,255":"60,100,120"},${R(.02,.08)})`;
+      g.fillRect(c2*tw+1, r2*tw+1, tw-2, tw-2);
+    }
+    g.strokeStyle="rgba(70,110,130,.4)"; g.lineWidth=1.5;
+    for(let i=0;i<=8;i++){
+      g.beginPath(); g.moveTo(i*tw,0); g.lineTo(i*tw,s); g.stroke();
+      g.beginPath(); g.moveTo(0,i*tw); g.lineTo(s,i*tw); g.stroke();
+    }
+    for(let i=0;i<12;i++){ // 水光折射斑
+      g.strokeStyle=`rgba(255,255,255,${R(.15,.3)})`; g.lineWidth=R(1.5,3);
+      g.beginPath();
+      let x=R(-20,s), y=R(0,s); g.moveTo(x,y);
+      for(let j=0;j<5;j++){ g.quadraticCurveTo(x+R(6,16), y+R(-12,12), x+=R(16,34), y+=R(-8,8)); }
+      g.stroke();
+    }
+  },
   grass(g,s){
     g.fillStyle="#31402c"; g.fillRect(0,0,s,s);
     speckle(g,s,900,["#3c5233","#2b3a26","#49603a","#26301f"],.6);
@@ -1085,6 +1107,23 @@ function matFor(I){
   }
   MAT_CACHE[I.id] = m;
   return m;
+}
+// 泳池專用材質組（池緣大理石／磁磚池底／半透明動態水面）
+const POOL_CACHE = {};
+function poolMats(I){
+  if(POOL_CACHE[I.id]) return POOL_CACHE[I.id];
+  const rimTex = makeTex((g,s)=>PAINT.marble(g,s,{c:"#ece6da", v:"#8a8478"}), 256);
+  rimTex.repeat.set(2,.3);
+  const rim = new THREE.MeshStandardMaterial({map:rimTex, roughness:.35, envMapIntensity:.5});
+  const floorTex = makeTex((g,s)=>PAINT.pooltile(g,s,I), 256);
+  floorTex.repeat.set(2,2);
+  const floor = new THREE.MeshStandardMaterial({map:floorTex, roughness:.25, envMapIntensity:.4});
+  const wtex = makeTex((g,s)=>PAINT.waterp(g,s,I), 256);
+  wtex.repeat.set(2,2);
+  waterTexes.push(wtex);
+  const water = new THREE.MeshStandardMaterial({map:wtex, transparent:true, opacity:.62,
+    depthWrite:false, roughness:.03, envMapIntensity:1.3});
+  return POOL_CACHE[I.id] = {rim, floor, water};
 }
 const ghost = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), new THREE.MeshBasicMaterial({
   color:0xc9a35c, transparent:true, opacity:.28, depthWrite:false}));
@@ -1331,6 +1370,22 @@ function addMod(t, cx, y, cz, r, silent, opts){
     m = new THREE.Group();
     BUILDERS[T.furn](m, T.c);
     m.position.set(cx, y, cz);
+  }else if(T.pool){ // 泳池：池緣＋磁磚池底＋透明水面
+    m = new THREE.Group();
+    const pm = poolMats(T);
+    const rimW = .3, iw = w - rimW*2, idp = d - rimW*2;
+    for(const [bw2,bd2,x2,z2] of [[w,rimW,0,d/2-rimW/2],[w,rimW,0,-(d/2-rimW/2)],
+                                   [rimW,idp,w/2-rimW/2,0],[rimW,idp,-(w/2-rimW/2),0]]){
+      const b = new THREE.Mesh(boxGeo(bw2,h,bd2), pm.rim);
+      b.position.set(x2, h/2, z2);
+      b.castShadow = b.receiveShadow = true;
+      m.add(b);
+    }
+    const fl = new THREE.Mesh(boxGeo(iw,.06,idp), pm.floor);
+    fl.position.set(0,.03,0); fl.receiveShadow = true; m.add(fl);
+    const wt = new THREE.Mesh(boxGeo(iw,.04,idp), pm.water);
+    wt.position.set(0, h-.14, 0); m.add(wt);
+    m.position.set(cx, y, cz);
   }else if(T.stair){ // 樓梯：實體踏步組
     m = new THREE.Group();
     const mat = matFor(T);
@@ -1394,6 +1449,7 @@ addEventListener("keydown", e=>{
   }
   if(e.code==="KeyE") openCatalog();
   if(e.code==="KeyR") rot = (rot+1)%4;
+  if(e.code==="KeyT" && started && !paused) toggleTour();
   if(e.code==="KeyX" && started && !paused) breakBlock();
   if(e.code==="KeyC") cutAt();
   if(e.code==="KeyB") openShop();
@@ -1540,7 +1596,7 @@ function validPlace(p){
   return true;
 }
 function placeBlock(){
-  if(S.over) return;
+  if(S.over || tour) return;
   const t = targetPlace();
   if(!t || !t.place || !validPlace(t.place)) return;
   const T = ITEMS[sel];
@@ -1552,7 +1608,7 @@ function placeBlock(){
   renderHUD(); queueSave();
 }
 function breakBlock(){
-  if(S.over) return;
+  if(S.over || tour) return;
   const t = targetPlace();
   if(!t || !t.hit) return;
   const d = delMod(t.hit.userData.mid);
@@ -1582,9 +1638,61 @@ function cutMod(mesh){
   renderHUD(); queueSave();
 }
 function cutAt(){
-  if(!started || paused || S.over) return;
+  if(!started || paused || S.over || tour) return;
   const t = targetPlace();
   if(t && t.hit) cutMod(t.hit);
+}
+
+// ─── 參觀模式：第一人稱走進房子裡 ───────────────────
+let tour = false, tourVy = 0, tourGrounded = false;
+const EYE = 1.7, STEP_UP = .55, BODY_R = .3;
+function localXZ(u, wx, wz){ // 世界座標 → 構件局部座標
+  const a = u.rot*Math.PI/2, dx = wx-u.cx, dz = wz-u.cz;
+  return {lx: dx*Math.cos(a) - dz*Math.sin(a), lz: dx*Math.sin(a) + dz*Math.cos(a)};
+}
+function supportAt(x, z, feet){ // 腳下最高可站表面（含樓梯坡道）
+  let best = 0;
+  for(const m of blocks.values()){
+    const u = m.userData, I = ITEMS[u.t], A = aabbOf(u);
+    if(x < A.minX-.25 || x > A.maxX+.25 || z < A.minZ-.25 || z > A.maxZ+.25) continue;
+    let top;
+    if(I.stair){
+      const {lz} = localXZ(u, x, z);
+      const prog = Math.max(0, Math.min(1, (u.cd/2 - lz) / u.cd));
+      top = u.y + prog * u.ch;
+    }else top = A.maxY;
+    if(top <= feet + STEP_UP && top > best) best = top;
+  }
+  return best;
+}
+function hitWall(x, z, feet){
+  for(const m of blocks.values()){
+    const u = m.userData, I = ITEMS[u.t];
+    if(I.stair) continue; // 樓梯當坡道走
+    const A = aabbOf(u);
+    if(A.maxY <= feet + STEP_UP) continue;   // 低於膝蓋的當台階
+    if(A.minY >= feet + EYE + .1) continue;  // 高過頭頂的不擋
+    if(x > A.minX-BODY_R && x < A.maxX+BODY_R && z > A.minZ-BODY_R && z < A.maxZ+BODY_R) return true;
+  }
+  return false;
+}
+function toggleTour(){
+  if(!started || S.over) return;
+  tour = !tour;
+  ghost.visible = false;
+  $("crosshair").hidden = tour;
+  $("hotbar").hidden = tour;
+  $("selinfo").hidden = tour;
+  $("btn-tour").textContent = tour ? (IS_TOUCH ? "回到建造" : "回到建造 (T)") : (IS_TOUCH ? "參觀" : "參觀 (T)");
+  if(tour){
+    tourVy = 0;
+    const g = supportAt(camera.position.x, camera.position.z, camera.position.y);
+    camera.position.y = g + EYE;
+    pushLog("gain", "參觀模式：走進你蓋的房子——可以爬樓梯、跳躍，再按一次離開。");
+  }else{
+    camera.position.y = Math.max(camera.position.y, 3.5);
+    pushLog("", "回到建造模式（飛行）。");
+  }
 }
 
 // ─── HUD ────────────────────────────────────────────
@@ -1940,11 +2048,13 @@ function showStart(){
     `<table><tr><td>左搖桿</td><td>移動</td></tr><tr><td>右側拖曳</td><td>轉視角</td></tr>` +
     `<tr><td>放置／拆除</td><td>對準星處操作</td></tr><tr><td>旋轉</td><td>轉構件方向</td></tr>` +
     `<tr><td>建材目錄</td><td>瀏覽全部建材</td></tr><tr><td>切割</td><td>把構件切成兩半</td></tr>` +
+    `<tr><td>參觀</td><td>走進房子（上升鍵＝跳）</td></tr>` +
     `<tr><td>上升／下降</td><td>飛行</td></tr></table>` :
     `<table><tr><td>W A S D</td><td>移動</td></tr><tr><td>空白鍵 / Shift</td><td>上升 / 下降（飛行）</td></tr>` +
     `<tr><td>滑鼠</td><td>視角（點畫面鎖定）</td></tr><tr><td>左鍵 / 右鍵</td><td>拆除 / 放置構件</td></tr>` +
     `<tr><td>R</td><td>旋轉構件方向</td></tr><tr><td>E</td><td>開建材目錄</td></tr>` +
     `<tr><td>C</td><td>切割構件（切成兩半）</td></tr>` +
+    `<tr><td>T</td><td>參觀模式（走進房子、爬樓梯）</td></tr>` +
     `<tr><td>1–0 或滾輪</td><td>快捷列選建材</td></tr><tr><td>B / N</td><td>防災工程 / 跳月</td></tr></table>`;
   const resume = canResume && !S.over
     ? `<div class="shoprow owned" style="cursor:pointer" id="md-resume"><span class="ic">▶️</span>` +
@@ -2181,6 +2291,7 @@ function sellProject(){
   });
 }
 $("btn-sell").addEventListener("click", e=>{ e.currentTarget.blur(); sellProject(); });
+$("btn-tour").addEventListener("click", e=>{ e.currentTarget.blur(); if(started && !paused) toggleTour(); });
 $("btn-dl").addEventListener("click", e=>{ e.currentTarget.blur(); download3D(e.target); });
 
 // ─── 主迴圈 ─────────────────────────────────────────
@@ -2207,8 +2318,6 @@ function tick(){
   autoQuality(dt);
 
   if(started && !paused && !S.over){
-    // 移動（飛行）
-    const sp = 8*dt;
     const f = new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
     const r = new THREE.Vector3(-f.z,0,f.x); // 右向量 = forward × up
     let mx=0,mz=0,my=0;
@@ -2216,8 +2325,26 @@ function tick(){
     if(keys.KeyD) mx+=1; if(keys.KeyA) mx-=1;
     if(keys.Space) my+=1; if(keys.ShiftLeft||keys.ShiftRight) my-=1;
     mz -= joyV.y; mx += joyV.x; my += flyUp;
-    camera.position.addScaledVector(f, mz*sp).addScaledVector(r, mx*sp);
-    camera.position.y = Math.max(1.2, Math.min(MAX_Y+6, camera.position.y + my*sp));
+    if(tour){ // 走路：碰撞＋重力＋樓梯坡道
+      const sp = 4.4*dt;
+      let px = camera.position.x, pz = camera.position.z;
+      const feet = camera.position.y - EYE;
+      const nx = px + (f.x*mz + r.x*mx)*sp;
+      if(!hitWall(nx, pz, feet)) px = nx;
+      const nz = pz + (f.z*mz + r.z*mx)*sp;
+      if(!hitWall(px, nz, feet)) pz = nz;
+      if((keys.Space || flyUp > 0) && tourGrounded){ tourVy = 7.4; tourGrounded = false; }
+      tourVy -= 22*dt;
+      const g = supportAt(px, pz, feet + STEP_UP);
+      let nfeet = feet + tourVy*dt;
+      if(nfeet <= g && tourVy <= 0){ nfeet = g; tourVy = 0; tourGrounded = true; }
+      else tourGrounded = false;
+      camera.position.set(px, nfeet + EYE, pz);
+    }else{ // 建造：飛行
+      const sp = 8*dt;
+      camera.position.addScaledVector(f, mz*sp).addScaledVector(r, mx*sp);
+      camera.position.y = Math.max(1.2, Math.min(MAX_Y+6, camera.position.y + my*sp));
+    }
 
     // 月份計時（自由建造模式時間暫停）
     if(S.mode !== "free"){
@@ -2226,8 +2353,8 @@ function tick(){
       if(monthT >= MONTH_SECS) advanceMonth();
     }
 
-    // 預覽鬼影（金色＝可放，紅色＝不可）
-    const t = targetPlace();
+    // 預覽鬼影（金色＝可放，紅色＝不可；參觀模式不顯示）
+    const t = tour ? null : targetPlace();
     if(t && t.place){
       const T = ITEMS[sel], {hx,hz} = dimsOf(sel, rot);
       ghost.scale.set(hx*2, T.h, hz*2);
@@ -2272,6 +2399,7 @@ addEventListener("resize", ()=>{
 function boot(data){
   blocks = new Map();
   if(IS_TOUCH){
+    $("btn-tour").textContent = "參觀";
     $("btn-cat").textContent = "建材目錄";
     $("btn-shop").textContent = "防災工程";
     $("btn-skip").textContent = "跳到下個月";
