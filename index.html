@@ -323,6 +323,8 @@ const SHAPES = {
   win:    {suffix:"窗牆",   w:4,  h:3,   d:.25, cost:65,  lux:4, cat:"門窗"},
   cont:   {suffix:"貨櫃屋", w:6,  h:2.6, d:2.5, cost:150, lux:5, cat:"貨櫃"},
   contS:  {suffix:"短貨櫃", w:3,  h:2.6, d:2.5, cost:90,  lux:3, cat:"貨櫃"},
+  stair:  {suffix:"直梯",   w:2,  h:3,   d:4,   cost:50,  lux:2, cat:"樓梯", stair:true},
+  stairS: {suffix:"短梯",   w:1.5,h:1.5, d:2,   cost:25,  lux:1, cat:"樓梯", stair:true},
   panel:  {suffix:"發光板", w:4,  h:3,   d:.12, cost:70,  lux:5, cat:"特殊", emissive:true},
   pool:   {suffix:"泳池",   w:4,  h:.6,  d:4,   cost:200, lux:10, cat:"特殊", pool:true},
 };
@@ -336,19 +338,19 @@ HUE_NAMES.forEach((n,i)=>{
 // 材質家族：painter 名稱、價格/豪華倍率、可用形狀、色樣 [id, 名稱, 主色, 副色?]
 const FAMS = [
   {painter:"concrete", label:"混凝土", mult:1, luxM:1,
-   shapes:["wall","wallS","wallLow","cube","col","beam","slab","slabS"],
+   shapes:["wall","wallS","wallLow","cube","col","beam","slab","slabS","stair","stairS"],
    mats:[["cc1","淺灰混凝土","#989da2"],["cc2","深灰混凝土","#6f747a"],["cc3","米白混凝土","#b6b1a4"],
          ["cc4","暖沙混凝土","#a89b86"],["cc5","青灰混凝土","#8a949c"],["cc6","炭黑混凝土","#4a4e54"]]},
   {painter:"marble", label:"大理石", mult:2.6, luxM:3,
-   shapes:["wall","wallS","wallLow","cube","col","slab","slabS"],
+   shapes:["wall","wallS","wallLow","cube","col","slab","slabS","stair","stairS"],
    mats:[["mb1","白大理石","#ece6da","#6f6a60"],["mb2","黑金大理石","#2e2e34","#c9a35c"],
          ["mb3","墨綠大理石","#2e4638","#9fb8a6"],["mb4","玫瑰大理石","#d8b8b2","#8f5f58"],
          ["mb5","米黃大理石","#ded2b8","#9a8a68"],["mb6","灰雲大理石","#c6c6c8","#77777c"]]},
   {painter:"granite", label:"花崗岩", mult:1.9, luxM:2,
-   shapes:["wall","wallS","wallLow","cube","col","slab","slabS"],
+   shapes:["wall","wallS","wallLow","cube","col","slab","slabS","stair","stairS"],
    mats:[["gr1","芝麻花崗岩","#9b9891"],["gr2","紅花崗岩","#9c6b5e"],["gr3","黑花崗岩","#4c4c4e"],["gr4","青花崗岩","#7d8a84"]]},
   {painter:"wood", label:"木作", mult:1.4, luxM:1.6, flags:{flammable:true},
-   shapes:["wall","wallS","wallLow","cube","col","beam","slab","slabS"],
+   shapes:["wall","wallS","wallLow","cube","col","beam","slab","slabS","stair","stairS"],
    mats:[["wd1","淺橡木","#b08a5c"],["wd2","深胡桃木","#5e3f26"],["wd3","柚木","#8a5a33"],["wd4","紅檜木","#a06a42"],
          ["wd5","白洗木","#c9b9a4"],["wd6","黑檀木","#3a2c22"],["wd7","竹材","#c2a86a"],["wd8","松木","#c09a6a"]]},
   {painter:"brick", label:"磚作", mult:1.1, luxM:1,
@@ -356,12 +358,12 @@ const FAMS = [
    mats:[["bk1","紅磚","#a04a3c"],["bk2","橙磚","#b06a44"],["bk3","黃磚","#b89a5e"],
          ["bk4","灰磚","#8a8a86"],["bk5","白磚","#cfc8bc"],["bk6","黑磚","#4c4a48"]]},
   {painter:"stone", label:"石材", mult:1.5, luxM:1.5,
-   shapes:["wall","wallS","wallLow","cube","slab","slabS"],
+   shapes:["wall","wallS","wallLow","cube","slab","slabS","stair","stairS"],
    mats:[["st1","板岩","#5f6468"],["st2","砂岩","#c2a982"],["st3","洞石","#cbbfa8"],["st4","玄武岩","#3c4044"]]},
   {painter:"paint", label:"塗裝", mult:1.05, luxM:1,
    shapes:["wall","wallS","wallLow","cube"], mats:PAINT_MATS},
   {painter:"metal", label:"金屬", mult:2.2, luxM:2.5, flags:{metal:true},
-   shapes:["wall","wallS","wallLow","cube","col","beam","roof"],
+   shapes:["wall","wallS","wallLow","cube","col","beam","roof","stair","stairS"],
    mats:[["mt1","拉絲不鏽鋼","#b8bcc2"],["mt2","金箔","#d3ae42"],["mt3","紅銅","#a2643c"],
          ["mt4","鈦黑","#3a3d44"],["mt5","香檳金","#c8b088"],["mt6","青銅綠","#5e7a6a"]]},
   {painter:"tile", label:"瓦作", mult:1, luxM:1,
@@ -435,7 +437,7 @@ const FURN = [
 ];
 // 攤平成 ITEMS：id = 形狀.材質
 const ITEMS = {};
-const CATS = ["牆面","玻璃","門窗","樓板","屋頂","柱樑","方塊","貨櫃","內裝","特殊"];
+const CATS = ["牆面","玻璃","門窗","樓板","樓梯","屋頂","柱樑","方塊","貨櫃","內裝","特殊"];
 for(const F of FAMS){
   for(const sh of F.shapes){
     const S2 = SHAPES[sh];
@@ -448,7 +450,8 @@ for(const F of FAMS){
         w:S2.w, h:S2.h, d:S2.d, cat:S2.cat,
         cost: Math.max(5, Math.round(S2.cost * F.mult)),
         lux:  Math.max(1, Math.round(S2.lux  * F.luxM)),
-        isRoof: !!S2.isRoof, pool: !!S2.pool, emissive: !!(S2.emissive || F.flags?.emissive),
+        isRoof: !!S2.isRoof, pool: !!S2.pool, stair: !!S2.stair,
+        emissive: !!(S2.emissive || F.flags?.emissive),
         trans: !!(S2.trans || F.flags?.trans), fragile: !!F.flags?.fragile,
         flammable: !!F.flags?.flammable, metal: !!F.flags?.metal,
       };
@@ -1328,6 +1331,18 @@ function addMod(t, cx, y, cz, r, silent, opts){
     m = new THREE.Group();
     BUILDERS[T.furn](m, T.c);
     m.position.set(cx, y, cz);
+  }else if(T.stair){ // 樓梯：實體踏步組
+    m = new THREE.Group();
+    const mat = matFor(T);
+    const steps = Math.round(h/.3), stepH = h/steps, unit = d/steps;
+    for(let i=0;i<steps;i++){
+      const depth = Math.round((d - i*unit)*100)/100;
+      const sm = new THREE.Mesh(boxGeo(w, Math.round(stepH*100)/100, depth), mat);
+      sm.position.set(0, i*stepH + stepH/2, -i*unit/2);
+      sm.castShadow = sm.receiveShadow = true;
+      m.add(sm);
+    }
+    m.position.set(cx, y, cz);
   }else{
     m = new THREE.Mesh(boxGeo(w,h,d), matFor(T));
     m.position.set(cx, y+h/2, cz);
@@ -1360,8 +1375,8 @@ function starterPad(){
 // ─── 視角與移動 ─────────────────────────────────────
 let yaw = 0.46, pitch = -0.24, rot = 0;
 let sel = "wall.mb1"; // 目前選用建材（id = 形狀.材質）
-let recents = ["wall.mb1","gwall.gl1","slab.mb1","roof.tl1","door.dr1","win.wn1",
-               "col.mb1","cont.ct1","pool.pl1","panel.lw1"];
+let recents = ["wall.mb1","gwall.gl1","slab.mb1","stair.mb1","roof.tl1","door.dr1",
+               "win.wn1","cont.ct1","pool.pl1","panel.lw1"];
 function selectItem(id){
   if(!ITEMS[id]) return;
   sel = id;
@@ -1546,7 +1561,7 @@ function breakBlock(){
 // ─── 切割工具：把構件沿較長邊切成兩半 ───────────────
 function cutMod(mesh){
   const u = mesh.userData, I = ITEMS[u.t];
-  if(I.furn){ pushLog("event", "家具無法切割。"); return; }
+  if(I.furn || I.stair){ pushLog("event", "這種構件無法切割。"); return; }
   const cutW = u.cw >= u.cd;
   const len = cutW ? u.cw : u.cd;
   if(len < 1.8){ pushLog("event", "構件已太小，無法再切割。"); return; }
